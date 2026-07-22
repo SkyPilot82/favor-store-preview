@@ -610,7 +610,7 @@ html, body {
 .av-disc.av-empty img { object-fit: contain; padding: 4px; opacity: 0.7; }
 .av-disc.pc-av { width: 24px; height: 24px; }
 .av-disc.lb-av { width: 30px; height: 30px; }
-.av-disc.pf-av-current { width: 44px; height: 44px; }
+.av-disc.pf-av-current { width: 53px; height: 53px; }   /* +20% (Wyatt 7/21) — this disc IS the crest-gallery door */
 
 /* Profile — the crest picker grid */
 .pf-avatars {
@@ -629,6 +629,66 @@ html, body {
 .pf-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-av:hover { transform: scale(1.08); border-color: var(--gold); }
 .pf-av.on { border-color: #ffd97a; box-shadow: 0 0 12px rgba(255,217,122,0.5); }
+
+/* ── Crest gallery — tap your portrait, every crest shows up ── */
+.pf-crest-btn {
+    background: none; border: none; padding: 0; cursor: pointer;
+    position: relative; display: inline-flex; flex: none;
+}
+.pf-crest-btn .av-disc { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.pf-crest-btn:hover .av-disc { box-shadow: 0 0 12px rgba(255,217,122,0.5); transform: scale(1.05); }
+.pf-crest-edit {
+    position: absolute; right: -4px; bottom: -4px;
+    width: 16px; height: 16px; line-height: 15px; text-align: center;
+    font-size: 10px; color: var(--gold);
+    background: #1d1106; border: 1px solid rgba(201,168,76,0.45); border-radius: 50%;
+    pointer-events: none;
+}
+.pf-crestrow { align-items: center; gap: 12px; }
+.cp-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 0 8px; }
+.cp-back {
+    background: none; border: 1px solid rgba(201,168,76,0.35); color: var(--gold);
+    border-radius: 14px; padding: 4px 14px; cursor: pointer;
+    font-family: 'EB Garamond', serif; font-size: 14px;
+}
+.cp-back:hover { border-color: var(--gold); }
+.cp-stars { color: #ffd97a; font-weight: 600; }
+.cp-note {
+    font-family: 'EB Garamond', serif; font-style: italic; font-size: 12.5px;
+    color: rgba(240,230,211,0.55); padding: 2px 0 4px;
+}
+.pf-avatars.cp-paid { border-bottom: none; padding-bottom: 18px; }
+.pf-avatars.cp-px { grid-template-columns: repeat(6, 1fr); border-bottom: none; }
+.cp-tile { position: relative; overflow: visible; }
+.cp-tile img { border-radius: 50%; }
+.cp-tile.locked img { filter: saturate(0.55) brightness(0.72); }
+.cp-price {
+    position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+    background: #1d1106; border: 1px solid rgba(201,168,76,0.5); color: #ffd97a;
+    border-radius: 10px; font-size: 10.5px; line-height: 1; padding: 3px 7px;
+    white-space: nowrap; pointer-events: none;
+}
+.cp-price.arm { background: var(--gold); color: #1d1106; border-color: var(--gold); }
+.cp-price.poor { color: rgba(240,230,211,0.45); }
+/* Pixel portraits stay crisp in every disc, at every size */
+.av-disc img[src*="avatars/pixel/"], .cp-pxtile img { image-rendering: pixelated; }
+/* The Emporium's crest shelf */
+.st-crests {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px; padding: 10px 4px;
+}
+.st-crest {
+    /* position:relative is load-bearing — .st-buy/.st-owned are absolute
+       rope tags that hang off their nearest positioned ancestor; without
+       this every card's tag escapes to the pane corner in one stack. */
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    background: rgba(29,17,6,0.55); border: 1px solid rgba(201,168,76,0.22);
+    border-radius: 12px; padding: 14px 8px 12px;
+}
+.st-crest.owned { border-color: rgba(201,168,76,0.5); }
+.st-crest-disc { width: 64px; height: 64px; }
+.st-crest .st-name { font-size: 13px; text-align: center; }
 
 /* In-game identity — your crest + royal name ride the board thumb's
    plate (a row on the stats panel broke its no-scroll fit). */
@@ -3411,6 +3471,17 @@ body:has(#game-screen.active) .music-toggle { left: auto; right: 240px; }
 .vs-delta.stars b { color: #ffd97a; }
 .vs-d-what { color: var(--gold); letter-spacing: 1px; }
 .vs-d-arrow { color: var(--parchment-dark); opacity: 0.8; }
+/* The fellowship note rides INSIDE the Stars chip, on its own line. */
+.vs-delta.stars { flex-wrap: wrap; }
+.vs-d-fellow {
+    flex-basis: 100%;
+    text-align: center;
+    font-size: 0.58em;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #ffd97a;
+    opacity: 0.85;
+}
 
 /* ── The Score Sheet — the box's tally grid recreated: heirs across,
    color-coded categories down, chunky numbers, one glance tells all. ── */
@@ -7302,6 +7373,9 @@ body:has(#game-screen.active) .emote-btn.on { display: flex; }
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 .st-stars-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 12px rgba(232, 195, 75, 0.4); }
+/* iOS/Steam shell: meta.js already empties the Mint (App Store 3.1.1) —
+   the door to it must vanish too, or the shell shows an empty easel */
+body.ios-shell .st-stars-btn, body.ios-shell #mintPanel { display: none !important; }
 .mint-inner { width: min(620px, 90%); padding-bottom: 10px; }
 .mint-head { border-top: none; text-align: center; padding: 14px 0 0; margin: 0 0 4px; }
 .tt-insp-lock {
@@ -7697,3 +7771,41 @@ body:has(#howto-overlay.open) .throw-hint {
 }
 .pf-apple:active { background: #1a1a1a; }
 .pf-apple-logo { font-size: 17px; line-height: 1; }
+
+/* ═══ GILT LADDER — hero-leveling rewards (branch hero-leveling) ═══ */
+/* Level 50+ ribbon re-gilds gold everywhere — the public mastery mark. */
+.rb.gild .rb-fill { background: linear-gradient(160deg, #f6e3a4, #e8c34b 30%, #b8902e 60%, #f0d278); box-shadow: 0 0 12px rgba(240,210,120,0.65); }
+.rb.gild .rb-num { color: #ffe9a8; text-shadow: 0 0 9px rgba(233,212,139,0.9); }
+.rb.gild .rb-track { box-shadow: inset 0 2px 5px rgba(0,0,0,0.9), 0 0 0 1px var(--gold-light), 0 0 10px rgba(201,168,76,0.5); }
+
+/* Hero select: the next visible reward on this hero's climb. */
+.hs-next {
+    margin: 2px 12px 0; padding: 2px 8px;
+    font-family: 'Cinzel', serif; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.06em; color: #e9d48b;
+    background: rgba(38,24,10,0.72); border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 9px; width: fit-content;
+}
+.hs-next.hs-mastered { color: #fff3cf; border-color: var(--gold-light); }
+.hs-next .crown-ico { width: 13px; height: 9px; vertical-align: -1px; }
+
+/* Victory chip: star drop + next-reward loop line. */
+.vs-d-stars { color: #ffe9a8; font-weight: 800; text-shadow: 0 0 8px rgba(233,212,139,0.7); }
+.vs-d-next {
+    flex-basis: 100%; margin-top: 3px;
+    font-size: 10px; letter-spacing: 0.05em; color: rgba(240,230,211,0.75);
+}
+
+/* Champ-overlay dress: a table swatch or crest as the celebration art. */
+.champ-table {
+    width: min(300px, 64vw); height: min(170px, 36vw);
+    margin: 10px auto; border-radius: 10px;
+    border: 2px solid var(--gold); box-shadow: 0 6px 24px rgba(0,0,0,0.6), inset 0 0 40px rgba(0,0,0,0.35);
+    background-size: 340px;
+}
+.champ-table.champ-rare { box-shadow: 0 6px 28px rgba(233,212,139,0.35), inset 0 0 40px rgba(0,0,0,0.35); }
+.champ-crest { width: 92px; height: 92px; margin: 10px auto; display: block; }
+.champ-crest img { width: 100%; height: 100%; }
+
+/* Crest gallery: hero-crest tiles reuse cp-tile; locked shows Lv n/15. */
+.cp-heroes .cp-tile.locked img { filter: grayscale(0.75) brightness(0.6); }
