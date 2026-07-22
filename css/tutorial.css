@@ -1,0 +1,65 @@
+/* FAVOR — How to Play v2 (branch howto-v2). Shield, spotlight, bubble. */
+
+#tutRoot { position: fixed; inset: 0; z-index: 11980; pointer-events: none; }
+.tut-block { position: fixed; background: transparent; pointer-events: auto; z-index: 11990; }
+#tutHole {
+    position: fixed; z-index: 11985; pointer-events: none;
+    border: 2px solid rgba(233, 212, 139, 0.9); border-radius: 12px;
+    box-shadow: 0 0 0 200vmax rgba(10, 6, 2, 0.62), 0 0 22px rgba(233, 212, 139, 0.35);
+    transition: left 0.35s ease, top 0.35s ease, width 0.35s ease, height 0.35s ease;
+}
+#tutRoot.tut-watch #tutHole { display: none !important; }
+
+#tutBubble {
+    position: fixed; z-index: 12000; pointer-events: auto;
+    width: min(430px, calc(100vw - 24px));
+    background: linear-gradient(180deg, #2b1c0c, #1d1207);
+    border: 1.5px solid var(--gold, #c9a84c); border-radius: 14px;
+    padding: 14px 18px 12px; color: #f0e6d3;
+    font-family: 'Crimson Text', Georgia, serif; font-size: 15.5px; line-height: 1.5;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.65), 0 0 18px rgba(201, 168, 76, 0.25);
+    transition: left 0.35s ease, top 0.35s ease;
+}
+#tutBubble.tut-b-center { left: 50% !important; top: 44% !important; transform: translate(-50%, -50%); }
+#tutBubble.tut-b-corner {
+    left: 14px !important; top: auto !important; bottom: 14px; transform: none;
+    width: min(360px, calc(100vw - 28px)); opacity: 0.96;
+}
+.tut-kicker { font-family: 'Cinzel', serif; font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: #a98b4e; }
+.tut-title { font-family: 'Cinzel', serif; font-size: 18px; font-weight: 800; color: #e9d48b; margin: 3px 0 6px; }
+.tut-text b { color: #ffe9a8; }
+.tut-next { margin-top: 10px; }
+.tut-count { font-size: 11px; color: rgba(240, 230, 211, 0.45); margin-top: 8px; text-align: right; font-family: 'Cinzel', serif; }
+.tut-green { color: #8ce17d; font-weight: 700; }
+.tut-orange { color: #ff9d3c; font-weight: 700; }
+
+/* Card anatomy: real card art + positioned callout chips. */
+.tut-anat { position: relative; width: 240px; margin: 10px auto 2px; }
+.tut-anat img { width: 100%; border-radius: 10px; border: 1px solid rgba(201, 168, 76, 0.5); display: block; }
+.tut-an-chip {
+    position: absolute; max-width: 46%;
+    background: rgba(20, 12, 4, 0.92); border: 1px solid var(--gold, #c9a84c);
+    border-radius: 8px; padding: 3px 7px;
+    font-size: 10.5px; line-height: 1.3; color: #ffe9a8;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+
+/* Pulse on the exact control the step wants tapped. */
+.tut-pulse { animation: tutPulse 1.4s ease-in-out infinite !important; }
+@keyframes tutPulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(233, 212, 139, 0.9), 0 0 18px 5px rgba(233, 212, 139, 0.45); }
+    50%      { box-shadow: 0 0 0 3px rgba(233, 212, 139, 1),   0 0 26px 9px rgba(233, 212, 139, 0.65); }
+}
+
+/* Finale */
+#tutRoot.tut-done { pointer-events: auto; background: rgba(10, 6, 2, 0.7); }
+.tut-finale { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+.tut-finale-card {
+    background: linear-gradient(180deg, #2b1c0c, #1d1207);
+    border: 2px solid var(--gold, #c9a84c); border-radius: 18px;
+    padding: 30px 40px; text-align: center; max-width: 440px; color: #f0e6d3;
+    font-family: 'Crimson Text', Georgia, serif;
+    box-shadow: 0 0 60px rgba(201, 168, 76, 0.3);
+}
+.tut-finale-card h2 { font-family: 'Cinzel', serif; color: #e9d48b; margin: 4px 0 10px; }
+.tut-finale-card p { margin-bottom: 16px; line-height: 1.55; }
