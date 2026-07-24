@@ -150,6 +150,23 @@
     const gameplayIdle = () =>
         game.phase === 'gameplay' && game.pendingActivations[0] === null && !panelActive();
 
+    // ── Melee gate ───────────────────────────────────────────────────
+    // Wyatt: the Melee prompt must come up FIRST — read it, hit Next, THEN the
+    // cinematic starts (unobstructed). showMeleeSplash (ui.js) awaits this gate
+    // when TUT_ACTIVE; the melee step's Next resolves it. meleePreOk covers the
+    // (human-impossible) case where Next fires before the cinematic asks.
+    let meleeResolve = null, meleePreOk = false;
+    function tutMeleeGate() {
+        return new Promise(res => {
+            if (meleePreOk) { meleePreOk = false; res(); return; }
+            meleeResolve = res;
+        });
+    }
+    function tutMeleeGo() {
+        if (meleeResolve) { const r = meleeResolve; meleeResolve = null; r(); }
+        else meleePreOk = true;
+    }
+
     // ── The shield: 4 blocker slabs + a spotlight hole + the bubble ──
     let root, hole, bubble, blockers, tick = null, stepIdx = -1, active = false;
 
@@ -177,7 +194,10 @@
         blockers = [...root.querySelectorAll('.tut-block')];
         bubble.querySelector('.tut-next').onclick = () => {
             const s = STEPS[stepIdx];
-            if (s && s.advance === 'next') nextStep();
+            if (s && s.advance === 'next') {
+                if (s.onNext) { try { s.onNext(); } catch (e) { /* non-fatal */ } }
+                nextStep();
+            }
         };
         // Skip-anytime — persistent, works in every step (shielded or watch).
         root.querySelector('#tutSkip').onclick = skip;
@@ -225,6 +245,15 @@
             return;
         }
         bubble.style.display = '';
+        // No-shield step (e.g., the slider, which sits over the board overlay —
+        // dimming would black out the board Wyatt is trying to look at). Just the
+        // bubble, off to a side so the board stays visible.
+        if (s.noShield) {
+            hole.style.display = 'none';
+            blockers.forEach(b => { b.style.display = 'none'; });
+            placeBubble(null, s);
+            return;
+        }
         const el = targetEl(s);
         const watch = s.mode === 'watch';
         root.classList.toggle('tut-watch', watch);
@@ -256,8 +285,15 @@
     }
 
     function placeBubble(rect, s) {
-        bubble.classList.remove('tut-b-center', 'tut-b-corner');
+        bubble.classList.remove('tut-b-center', 'tut-b-corner', 'tut-b-left', 'tut-b-right');
         if (s.mode === 'watch') { bubble.classList.add('tut-b-corner'); bubble.style.left = ''; bubble.style.top = ''; return; }
+        // Pinned to a side — used when the spotlit thing sits in the middle (the
+        // board on the slider step, the mission card on the pick step) so the
+        // bubble doesn't cover it. CSS handles the actual placement.
+        if (s.bubbleSide === 'left' || s.bubbleSide === 'right') {
+            bubble.classList.add(s.bubbleSide === 'left' ? 'tut-b-left' : 'tut-b-right');
+            bubble.style.left = ''; bubble.style.top = ''; return;
+        }
         if (!rect) { bubble.classList.add('tut-b-center'); bubble.style.left = ''; bubble.style.top = ''; return; }
         // Use the REAL bubble size (compact CSS makes it narrower/shorter on phones).
         const bw = bubble.offsetWidth || Math.min(430, window.innerWidth - 24);
@@ -547,14 +583,21 @@
 
     // ══════════ SLIDER DETOUR — the board ring ══════════
     {
-        id: 'board-tour', target: '#boardThumb', advance: 'click', delay: 800,
+        // ONLY when the table is idle (rivals done revealing, waiting on you) —
+        // otherwise the detour lands mid-reveal and the board keeps blacking out
+        // as the reveal re-renders (Wyatt). At idle nothing moves, so opening the
+        // board is a real pause; closing it resumes with the next prompt.
+        id: 'board-tour', ready: () => gameplayIdle(), target: '#boardThumb', advance: 'click', delay: 800,
         title: 'Visit Your Board',
-        text: `Quick detour — <b>tap your board</b> to see the ring up close.`,
-        why: 'Hands-on transition into the slider lesson.',
+        text: `Quick detour — <b>tap your board</b> to see the ring up close. The table waits
+               while you look.`,
+        why: 'Hands-on transition into the slider lesson. Gated on gameplayIdle so no rival reveal is running behind it (that was blacking out the board).',
     },
     {
+        // No shield (dimming would black out the board) + bubble pinned LEFT so the
+        // board in the middle stays visible (Wyatt: prompt covered almost the board).
         id: 'slider', ready: () => overlayActive('#boardOverlay'), target: '#boardOverlay',
-        advance: () => !overlayActive('#boardOverlay'),
+        advance: () => !overlayActive('#boardOverlay'), noShield: true, bubbleSide: 'left',
         title: 'The Ring & the Slider',
         text: `Five slots. Your ring can slide for <b>5 Gold a space</b> (or free, when you
                discard for a slide). Land on a slot and it pays: gold coins pay Gold, skill
@@ -589,6 +632,9 @@
                 || document.getElementById('missionSelect');
         },
         advance: () => !overlayActive('#missionSelect'),
+        // Helping the Merchant is the leftmost mission — pin the bubble RIGHT so it
+        // doesn't cover the card the player has to read (Wyatt).
+        bubbleSide: 'right',
         title: 'Read a Mission — Take Helping the Merchant',
         text: `A mission reads like a card: <b>top-left = what it takes to succeed</b>
                (3 Survival & 3 Power), <b>top-right = the reward</b> (Gold, a skill, and a
@@ -671,21 +717,27 @@
         why: 'Frames the real ceremony (already tap-paced) and points out the player\'s own success — Wyatt: the phase must slow and be explained.',
     },
 
-    // ══════════ MELEE PHASE — hard-paced, narrated ══════════
+    // ══════════ MELEE PHASE — read the prompt, THEN it plays (unobstructed) ══════════
     {
-        id: 'melee-phase', ready: () => game.phase === 'melee', mode: 'watch',
-        advance: () => game.currentAct >= 2,
+        // The cinematic is HELD (showMeleeSplash awaits tutMeleeGate). This prompt
+        // comes up over the table, you read it, hit Next → the Melee begins with no
+        // tutorial overlay covering it (act1-done stays hidden until Act 2). Wyatt.
+        id: 'melee-phase', ready: () => game.phase === 'melee', advance: 'next',
+        onNext: () => tutMeleeGo(),
         title: 'THE MELEE',
-        text: `Every heir's Power, head to head — weapons, board slots, everything counts
-               (you can't borrow Power here — what you built is what you bring).
-               <b>Tap Continue</b> to march through each fighter's tally. Prestige pays the
-               podium <b>5 / 3 / 1</b> in Act 1… and it triples by Act 3.`,
-        why: 'The Melee is the showpiece; the prompt frames the numbers, then the real cinematic carries the pacing (tutorial forces wait-for-tap).',
+        text: `The Act ends in the <b>Melee</b>: every heir's Power clashes head to head —
+               weapons, board slots, everything counts (you can't borrow Power here — what
+               you built is what you bring). The winners take <b>Prestige</b>: the podium
+               pays <b>5 / 3 / 1</b> in Act 1… and it triples by Act 3.
+               <b>Hit Next to watch it unfold.</b>`,
+        why: 'Wyatt: the Melee prompt must appear FIRST, be read, and Next STARTS the cinematic (gated on tutMeleeGo). Then the tutorial hides (act1-done waits for Act 2) so nothing blocks the Melee.',
     },
 
     // ══════════ SLICE END ══════════
     {
-        id: 'act1-done', target: null, advance: 'next',
+        // Hidden (armed=false) while the Melee cinematic plays — appears only once
+        // the Melee is done and Act 2 begins, so it never covers the Melee.
+        id: 'act1-done', ready: () => game.currentAct >= 2, target: null, advance: 'next',
         title: 'Act 1 Complete',
         text: `You've played the whole loop: read cards, built skills and Power, claimed and
                resolved a mission, and fought the Melee. Acts 2 and 3 raise the stakes —
@@ -725,6 +777,8 @@
         // The tutorial owns pacing — this flag tells showMeleeSplash to WAIT
         // for a tap instead of auto-closing, so the Melee can be narrated.
         window.TUT_ACTIVE = true;
+        // The Melee waits for the player to read its prompt and hit Next.
+        window.__tutMeleeGate = tutMeleeGate;
         // Silence the in-game coach-marks (Prong 2) — they'd fire a SECOND
         // tutorial overlay on top of this one. coachTick early-returns on this.
         window._coachOff = true;

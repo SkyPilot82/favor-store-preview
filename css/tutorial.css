@@ -25,6 +25,9 @@
     left: 14px !important; top: auto !important; bottom: 14px; transform: none;
     width: min(360px, calc(100vw - 28px)); opacity: 0.96;
 }
+/* Pinned to a side — leaves the middle of the screen (a board/mission card) clear. */
+#tutBubble.tut-b-left  { left: 10px !important;  right: auto !important; top: 50% !important; bottom: auto; transform: translateY(-50%); }
+#tutBubble.tut-b-right { right: 10px !important; left: auto !important;  top: 50% !important; bottom: auto; transform: translateY(-50%); }
 .tut-kicker { font-family: 'Cinzel', serif; font-size: 10px; font-weight: 700; letter-spacing: 0.22em; color: #a98b4e; }
 .tut-title { font-family: 'Cinzel', serif; font-size: 18px; font-weight: 800; color: #e9d48b; margin: 3px 0 6px; }
 .tut-text b { color: #ffe9a8; }

@@ -8236,10 +8236,15 @@ function showMissionDrawBeat() {
 // the results, the portraits and the engine's power arithmetic, and await
 // the promise so the act flow waits for the moment. Unattended it advances
 // on its own (per-fighter fallback + autoClose), so MP never stalls on a seat.
-function showMeleeSplash(results, actNum) {
+async function showMeleeSplash(results, actNum) {
     const el = document.getElementById('meleeSplash');
     if (!el || !results || !results.length || typeof playMeleeCinematic !== 'function') {
         return Promise.resolve();
+    }
+    // Tutorial: hold the cinematic until the player has READ the Melee prompt and
+    // hit Next (window.__tutMeleeGate resolves then). Never blocks the real game.
+    if (window.TUT_ACTIVE && typeof window.__tutMeleeGate === 'function') {
+        try { await window.__tutMeleeGate(); } catch (e) {}
     }
     return playMeleeCinematic(el, results, actNum, {
         speed: window.CINEMATIC_SPEED || 1,
