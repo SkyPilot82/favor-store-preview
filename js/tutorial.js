@@ -762,6 +762,12 @@
         window._mpSkipQueue = true;
 
         game = new FavorGame(3);
+        // FULL DETERMINISM (Wyatt): seed the engine's RNG BEFORE loadDecks so the
+        // deck shuffle — and therefore every hand, every rival's cards, and the
+        // mission pool — is IDENTICAL on every playthrough. (The AI is already
+        // deterministic; the shuffle was the only source of variation. The rigged
+        // lesson cards + pinned mission sit on top of this fixed deal.)
+        game.setSeed(0x20260724);
         game.loadDecks();
         game.initPlayers(CAST);
         game.emblemHolder = 0;
