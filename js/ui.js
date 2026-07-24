@@ -5424,7 +5424,10 @@ async function activateAllCards() {
                     renderGameState();
                 }
                 const dec = FAI.chooseAction(game, pi, card);
-                if (dec.action === 'mission_letter' && card.type === 'mission_letter'
+                // In the How-to-Play tutorial rivals NEVER claim a mission — that
+                // kept snatching the scripted mission the player needs (Wyatt).
+                // A guaranteed-false condition makes them discard the letter here.
+                if (!window.TUT_ACTIVE && dec.action === 'mission_letter' && card.type === 'mission_letter'
                     && game.players[pi].gold >= 1 && game.visibleMissions.length > 0) {
                     await showCardSpotlight(pi, card, 'play');
                     const result = game.activateCard(pi, card.id, 'mission_letter');
@@ -5461,8 +5464,10 @@ async function activateAllCards() {
                 const isMissionLetter = card.type === 'mission_letter';
 
                 if (isMissionLetter) {
-                    // AI mission letter: use it if they have gold and missions available, else discard
-                    if (game.players[pi].gold >= 1 && game.visibleMissions.length > 0) {
+                    // AI mission letter: use it if they have gold and missions available, else
+                    // discard. In the tutorial rivals never claim a mission (TUT_ACTIVE) so the
+                    // scripted mission the player needs is always still in the pool (Wyatt).
+                    if (!window.TUT_ACTIVE && game.players[pi].gold >= 1 && game.visibleMissions.length > 0) {
                         await showCardSpotlight(pi, card, 'play');
                         const result = game.activateCard(pi, card.id, 'mission_letter');
                         if (result && result.chooseMission) {

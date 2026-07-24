@@ -103,16 +103,34 @@
         });
         renderGameState();
     }
-    // Make sure Helping the Merchant sits face-up in the mission pool.
+    // Make sure Helping the Merchant sits face-up in the mission pool, no matter
+    // what — reclaim it from ANY deck or a rival who grabbed it, or clone it from
+    // the data. Rivals are ALSO barred from taking missions in the tutorial
+    // (window.TUT_ACTIVE guard in ui.js activateAllCards); this is the safety net.
     function rigMissions() {
-        if (game.visibleMissions.some(m => m.name === 'Helping the Merchant')) return;
-        const d = game.missionDecks[1] || [];
-        const i = d.findIndex(m => m.name === 'Helping the Merchant');
-        if (i >= 0) {
-            const take = d.splice(i, 1)[0];
+        const NAME = 'Helping the Merchant';
+        if (game.visibleMissions.some(m => m.name === NAME)) return;
+        const pinToPool = (mission, fromDeck) => {
             const give = game.visibleMissions.pop();
-            if (give) d.push(give);
-            game.visibleMissions.unshift(take);
+            if (give) { (fromDeck || (game.missionDecks[1] = game.missionDecks[1] || [])).push(give); }
+            game.visibleMissions.unshift(mission);
+        };
+        // 1) any mission deck
+        for (const act of [1, 2, 3]) {
+            const d = game.missionDecks[act] || [];
+            const i = d.findIndex(m => m.name === NAME);
+            if (i >= 0) { pinToPool(d.splice(i, 1)[0], d); return; }
+        }
+        // 2) reclaim from a rival who already claimed it (draft-time; not yet resolved)
+        for (let pi = 1; pi < game.playerCount; pi++) {
+            const held = game.players[pi].missions || [];
+            const j = held.findIndex(m => m.name === NAME);
+            if (j >= 0) { pinToPool(held.splice(j, 1)[0]); return; }
+        }
+        // 3) last resort: clone a fresh copy from the card data
+        if (window.FAVOR_DATA && window.FAVOR_DATA.missions) {
+            const tpl = window.FAVOR_DATA.missions.find(m => m.name === NAME);
+            if (tpl) { const c = JSON.parse(JSON.stringify(tpl)); c.id = 'tut-mission-helping'; pinToPool(c); }
         }
     }
     const heldMap = name => game.getPlayerMaps(0).includes(name);
