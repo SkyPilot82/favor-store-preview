@@ -1,23 +1,32 @@
 /**
- * FAVOR — How to Play v2: the guided first game (branch howto-v2)
+ * FAVOR — How to Play v3: the fully guided game (branch howto-v3)
  *
- * A hand-holding walk through a REAL game: the player sits at a scripted
- * three-seat table (You = the Bandit, Sir Aldric = the Knight, Old Wren =
- * the Fisherman) and plays a genuine Act 1 into Act 2 with the actual
- * engine — every prompt anchored to the real thing on screen, all other
- * input shielded off until the step allows it.
+ * A hand-holding walk through a REAL game where THE TUTORIAL OWNS THE PACING:
+ * the player sits at a scripted three-seat table (You = the Bandit, Sir Aldric
+ * = the Knight, Old Wren = the Fisherman) and plays a genuine game with the
+ * actual engine — EVERY turn is prompted, and the missions phase and Melee are
+ * narrated in place (the engine only advances when a step allows it; the Melee
+ * is forced to wait-for-tap via window.TUT_ACTIVE, see showMeleeSplash).
  *
- * Scripted cards are rigged PER TURN (swapped into the current hand from
- * this act's own deck/hands, so nothing act-illegal ever appears) — the
- * draft's pass-left rotation and the rivals' picks stay genuine.
+ * Scripted cards are rigged PER TURN and moved to the FRONT of the hand (from
+ * this act's own deck/hands, or cloned from card data as a last resort) so the
+ * lesson card is always first — the draft's pass-left rotation and the rivals'
+ * picks stay genuine.
+ *
+ * SCOPE: this file currently scripts the Act 1 SLICE (opening → every draft
+ * turn → mission claim → missions phase → Melee → "Act 1 Complete"). Acts 2 & 3
+ * (potions, artifacts, Map free-play, Mind's Eye / Philosopher's Stone, final
+ * scoring) follow the same skeleton and are built next.
  *
  * Integration contract (root game):
- *   reads/writes `game` (ui.js top-level binding), calls showGameScreen,
- *   renderGameState, beginThrowPhase, throwCard, addLogEntry; anchors on
- *   #actionPanel [data-act], #missionSelect, #boardThumb, #boardOverlay,
- *   #handZone .hand-card, #meleeSplash, .stats-panel, .mission-strip.
- *   Remove = delete this file + css/tutorial.css + the two script/link
- *   tags; nothing else references them.
+ *   reads/writes `game` (ui.js top-level binding), sets window.TUT_ACTIVE,
+ *   calls showGameScreen, renderGameState, beginThrowPhase, throwCard,
+ *   addLogEntry; anchors on #actionPanel [data-act], #missionSelect,
+ *   #boardThumb, #boardOverlay, #handZone .hand-card, #missionCeremony,
+ *   #meleeSplash, .stats-panel, .mission-strip.
+ *   Remove = delete this file + css/tutorial.css + the two script/link tags
+ *   and the `window.TUT_ACTIVE` guard in showMeleeSplash; nothing else
+ *   references them.
  */
 (function () {
     'use strict';
@@ -31,17 +40,30 @@
     // ── Card/mission rigging ─────────────────────────────────────────
     // Pull a card matching `pred` from anywhere in THIS act (deck first,
     // then rivals' hands) into the player's hand, swapping a non-key card
-    // back so every count stays honest.
-    function pullCard(pred, keepNames) {
+    // back so every count stays honest. `cloneName` is a last-resort: in a
+    // live draft a rival can PLAY the exact card a lesson needs before we
+    // pull it (gone from deck AND hands) — so for named lessons we clone a
+    // fresh copy from the card data, still swapping one out to keep counts.
+    function pullCard(pred, keepNames, cloneName) {
         const hand = game.players[0].hand;
-        if (hand.some(pred)) return true;
+        // Already holding it? Move it to the FRONT so the lesson card is the
+        // first (leftmost) card — the pulse and the copy both point at it.
+        const have = hand.findIndex(pred);
+        if (have >= 0) {
+            if (have > 0) { const [c] = hand.splice(have, 1); hand.unshift(c); }
+            return true;
+        }
         const act = game.currentAct;
         const give = hand.find(c => !keepNames.includes(c.name));
+        const swapIn = (take) => {
+            if (give) { hand.splice(hand.indexOf(give), 1); }
+            hand.unshift(take);
+        };
         const deckIdx = game.actDecks[act].findIndex(pred);
         if (deckIdx >= 0) {
             const take = game.actDecks[act].splice(deckIdx, 1)[0];
-            if (give) { hand.splice(hand.indexOf(give), 1); game.actDecks[act].push(give); }
-            hand.unshift(take);
+            if (give) game.actDecks[act].push(give);
+            swapIn(take);
             return true;
         }
         for (let i = 1; i < game.playerCount; i++) {
@@ -49,18 +71,36 @@
             const j = rh.findIndex(pred);
             if (j >= 0) {
                 const take = rh.splice(j, 1)[0];
-                if (give) { hand.splice(hand.indexOf(give), 1); rh.push(give); }
-                hand.unshift(take);
+                if (give) rh.push(give);
+                swapIn(take);
+                return true;
+            }
+        }
+        // Clone fallback (named lessons only): copy the data template, mint a
+        // fresh id so it's a distinct card, drop the giveaway into the deck.
+        if (cloneName && window.FAVOR_DATA && window.FAVOR_DATA.cards) {
+            const tpl = window.FAVOR_DATA.cards.find(c => c.name === cloneName);
+            if (tpl) {
+                const clone = JSON.parse(JSON.stringify(tpl));
+                clone.id = 'tut-' + cloneName.replace(/\s+/g, '') + '-' + (game.currentAct);
+                if (give) game.actDecks[act].push(give);
+                swapIn(clone);
                 return true;
             }
         }
         return false;
     }
     const byName = n => c => c.name === n;
-    const KEY_NAMES = ['Hunting', 'Cooking', 'Mission Letter', 'Great North Connection'];
+    // Cards the rig must never swap OUT of the hand to make room for another.
+    // Act 1 lesson set: Hunting (endeavor+green glow), Shark Tooth (weapon/Power),
+    // First Aid (endeavor, tops Survival to 3 for the mission), the Letter.
+    const KEY_NAMES = ['Hunting', 'Shark Tooth', 'First Aid', 'Mission Letter', 'Great North Connection'];
 
     function rigTurn(preds) {
-        preds.forEach(p => pullCard(typeof p === 'string' ? byName(p) : p, KEY_NAMES));
+        preds.forEach(p => {
+            const isName = typeof p === 'string';
+            pullCard(isName ? byName(p) : p, KEY_NAMES, isName ? p : null);
+        });
         renderGameState();
     }
     // Make sure Helping the Merchant sits face-up in the mission pool.
@@ -77,6 +117,20 @@
     }
     const heldMap = name => game.getPlayerMaps(0).includes(name);
     const you = () => game.players[0];
+
+    // ── State probes the steps gate on ───────────────────────────────
+    const panelActive = () => {
+        const p = document.getElementById('actionPanel');
+        return !!p && p.classList.contains('active');
+    };
+    const overlayActive = (sel) => {
+        const e = document.querySelector(sel);
+        return !!e && e.classList.contains('active');
+    };
+    // Between turns: your card isn't committed and no chooser is up — the
+    // moment it's safe to rig the next hand and prompt the next throw.
+    const gameplayIdle = () =>
+        game.phase === 'gameplay' && game.pendingActivations[0] === null && !panelActive();
 
     // ── The shield: 4 blocker slabs + a spotlight hole + the bubble ──
     let root, hole, bubble, blockers, tick = null, stepIdx = -1, active = false;
@@ -97,7 +151,8 @@
                 <div class="tut-anatomy"></div>
                 <button class="btn-royal primary tut-next"><span>Next</span></button>
                 <div class="tut-count"></div>
-            </div>`;
+            </div>
+            <button id="tutSkip" title="Leave the tutorial">Skip tutorial ✕</button>`;
         document.body.appendChild(root);
         hole = root.querySelector('#tutHole');
         bubble = root.querySelector('#tutBubble');
@@ -106,7 +161,20 @@
             const s = STEPS[stepIdx];
             if (s && s.advance === 'next') nextStep();
         };
+        // Skip-anytime — persistent, works in every step (shielded or watch).
+        root.querySelector('#tutSkip').onclick = skip;
         window.addEventListener('resize', layout);
+    }
+
+    // Leave the guided game for the real menu. On the standalone How-to page
+    // (tools/howto.html = index.html + this driver) that lands on the title.
+    function skip() {
+        if (!active) return;
+        if (!window.confirm('Leave the tutorial and go to the menu?')) return;
+        active = false;
+        if (tick) clearInterval(tick);
+        try { window.CINEMATIC_SPEED = 1.0; } catch (e) {}
+        location.assign('index.html');
     }
 
     function targetEl(s) {
@@ -286,321 +354,272 @@
         ${labels.map(l => `<span class="tut-an-chip" style="left:${l.x}%;top:${l.y}%">${l.t}</span>`).join('')}</div>`;
 
     const STEPS = [
+    // ══════════ OPENING — the table, the pieces, the goal ══════════
     {
         id: 'welcome', target: null, advance: 'next',
         title: 'Welcome to FAVOR',
-        text: `The King is dead — and you are one of his heirs. Over three Acts you'll
-               play cards, chase missions and battle in the Melee. Whoever holds the most
-               <b>Favor</b> when the dust settles takes the crown. Let's play a real
-               hand together — I'll walk you through everything.`,
-        why: 'Sets the fantasy and names the single win condition (Favor) before any mechanics. One idea per screen.',
+        text: `The King is dead — and you are one of his heirs. Over three <b>Acts</b>
+               you'll play cards, chase missions and clash in the <b>Melee</b>. Whoever
+               holds the most <b>Favor</b> when the dust settles takes the crown. Let's
+               play a real hand together — I'll stop and explain every new thing as it comes.`,
+        why: 'Sets the fantasy and the single win condition (Favor) before any mechanics.',
     },
     {
         id: 'your-board', target: '#boardThumb', advance: 'next',
         title: 'Your Character Board',
-        text: `You play the <b>Bandit</b>. This is your board — your ring sits on the
+        text: `You play the <b>Bandit</b>. This is your board. Your ring sits on the
                <b>center slot</b>, which quietly feeds you <b>+2 Power</b> the whole time
-               you stand there. Every hero's board is different.`,
-        why: "Orients the player to their own board first and plants the seed that boards GRANT things — the Bandit's center Power pays off later at the Melee.",
+               you stand there — and every hero's board grants something different.`,
+        why: 'Orients to their own board and plants that boards GRANT resources — the Bandit Power pays off at the Melee.',
     },
     {
         id: 'purse', target: '.stats-panel', advance: 'next',
         title: 'Your Purse & Reputation',
-        text: `Four numbers to know: <b>Gold</b> buys plays and borrows. <b>Prestige</b> is
-               points you win — mostly from the Melee. <b>Scorn</b> is points AGAINST you.
-               <b>Favor</b> is the score itself. Gold isn't points — but ties go to the
-               richer heir.`,
-        why: 'The four currencies in one breath, each with its one-line job. Players confuse Gold with score — the tiebreaker line settles it early.',
+        text: `Four numbers to watch. <b>Gold</b> pays to play cards and to borrow.
+               <b>Prestige</b> is points you win — mostly in the Melee. <b>Scorn</b> is
+               points AGAINST you. <b>Favor</b> is the score itself. Gold isn't points —
+               but ties go to the richer heir.`,
+        why: 'The four currencies, one line each. Players confuse Gold with score — the tiebreaker settles it early.',
     },
     {
-        id: 'missions-strip', target: '.mission-strip', advance: 'next',
+        id: 'missions-pool', target: '.mission-strip', advance: 'next',
         title: 'The Mission Pool',
-        text: `Three missions always wait face-up in the center of the table. Missions are
-               the biggest single source of Favor — we'll grab one in a few turns.`,
-        why: 'Names the third zone of the table and promises the mission beat, so the Mission Letter turn later lands on prepared ground.',
+        text: `Three missions always wait face-up in the middle of the table. Missions are
+               the single biggest source of Favor — we'll claim one in a few turns.`,
+        why: 'Names the third table zone and promises the mission beat.',
     },
     {
         id: 'hand-intro', target: '#handZone', advance: 'next', pad: 16,
-        before: () => rigTurn(['Hunting', c => c.act === 1 && (c.skills || []).includes('power')]),
-        title: 'Your Hand',
-        text: `Seven cards. Each turn every player secretly throws ONE into the middle —
-               then all are revealed and resolved. Here's the twist: the cards you don't
-               use get <b>passed to your left</b> each turn. Everyone drafts from
-               everyone's hands.`,
-        why: "The draft-and-pass rule is FAVOR's most alien mechanic for new players — it gets its own step before anything is thrown.",
+        title: 'Your Hand — and the Draft',
+        text: `Seven cards. Each turn every player secretly commits <b>one</b> card, then
+               all are revealed at once. The twist: the cards you DON'T use are
+               <b>passed to your left</b>. Everyone drafts from everyone's hands — so your
+               hand changes every single turn.`,
+        why: "The draft-and-pass rule is FAVOR's most alien mechanic — it gets its own beat before anything is thrown.",
     },
     {
+        id: 'card-types', target: '#handZone', advance: 'next', pad: 16,
+        title: 'Six Kinds of Card',
+        text: `Every card is one of six types: <b>Endeavors</b> (build skills),
+               <b>Weapons</b> (⚔ Power for the Melee), <b>Adventures</b> (Favor & skills),
+               <b>Wisdom</b> (rare skills), <b>Potions</b> (instant effects) and
+               <b>Artifacts</b> (pure Favor) — plus <b>Mission Letters</b>. Potions and
+               Artifacts appear in later Acts; you'll meet each type as it comes. Let's
+               read your first card.`,
+        why: 'Names all types up front (Wyatt: explain all on sight) so each later reveal lands prepared; flags that some are later-Act.',
+    },
+
+    // ══════════ TURN 1 — ENDEAVOR (card anatomy + the green glow) ══════════
+    {
         id: 'card-anatomy', target: '#handZone', advance: 'next', pad: 16,
+        before: () => rigTurn(['Hunting']),
         title: 'Reading a Card',
-        text: `Every card speaks the same language — here's Hunting from your hand:`,
+        text: `Here's <b>Hunting</b>, an Endeavor from your hand. Every card in the game
+               speaks the same language:`,
         anatomy: () => AN('assets/cards/regular/Hunting Card.jpg', [
-            { x: 2, y: 8,  t: '⬅ TOP-LEFT: what it COSTS you to play (skills you must already have, or Gold)' },
-            { x: 60, y: 8, t: 'TOP-RIGHT ➡ gold ovals: skills it GRANTS — and skills stay all game' },
-            { x: 2, y: 55, t: '⬅ Border color = its Act. Blue is Act 1' },
-            { x: 60, y: 82, t: 'Blue shield = Favor it scores at the end ➡' },
+            { x: 2, y: 8,  t: '⬅ TOP-LEFT: the COST to play — skills you must already have, or Gold' },
+            { x: 58, y: 8, t: 'TOP-RIGHT ➡ gold ovals: the skills it GRANTS you — and skills stay all game' },
+            { x: 2, y: 55, t: '⬅ Border colour = its Act. Blue is Act 1' },
+            { x: 58, y: 82, t: 'Blue shield = Favor it scores at the end ➡' },
         ]),
-        why: 'The symbols legend, on a real card the player is holding. Left = price, right = gift, border = act, shield = score — four anchors that decode every card in the game.',
         anatomyIsFn: true,
+        why: 'The symbol legend on a real held card: left = price, right = gift, border = act, shield = score.',
     },
     {
         id: 'green-glow', target: '#handZone', advance: 'next', pad: 16,
+        pulse: '#handZone .hand-card.playable',
         title: 'The Green Glow',
-        text: `See the cards breathing <b>green</b>? Green means <b>you can play this right
-               now</b> — you meet its cost as things stand. Hunting needs 1 Power: your
-               Bandit board's center slot covers it. No glow? You're missing something.`,
-        why: 'Explicit ask from the design: teach the green glow. Ties the glow to the board bonus from two steps ago, proving skills come from more than cards.',
+        text: `See Hunting breathing <span class="tut-green">green</span>? Green means
+               <b>you can play it right now</b> — you meet its cost as things stand
+               (Hunting needs 1 Power; your board's center slot covers it).
+               <b>But heads up:</b> if the table shifts before your turn resolves — gold
+               spent, a skill borrowed away — a green card can stop being playable. Green
+               is "right now," not "forever."`,
+        why: 'Explicit design ask: teach the green glow AND the disclaimer that affordability can change mid-round.',
     },
     {
-        id: 'throw-first', target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
+        id: 'throw-hunting', target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
         pulse: '#handZone .hand-card.playable',
         title: 'Throw Your First Card',
-        text: `Drag <b>Hunting</b> up toward the table to throw it in, face-down.
-               (Any green card works — Hunting's the lesson.)`,
-        why: 'First real action. The gesture is the phone/desktop commit, and letting them do it themselves — not a Next button — is what makes it stick.',
+        text: `Drag <b>Hunting</b> up toward the table to commit it, face-down.`,
+        why: 'First real action — the commit gesture, done by the player, not a button.',
     },
     {
-        id: 'rivals-throw', mode: 'watch',
-        before: () => beginThrowPhase(),
-        advance: () => game.allPlayersPicked && game.allPlayersPicked(),
-        title: 'The Rivals Answer',
-        text: `Sir Aldric and Old Wren are choosing too. Everyone commits blind —
-               nobody knows what's coming until the reveal.`,
-        why: 'A watch beat — the AI throws are real and staggered; narrating the blindness sells the simultaneous-commit tension.',
-    },
-    {
-        ready: () => document.getElementById('actionPanel').classList.contains('active'),
-        id: 'reveal-panel', target: '#actionPanel',
-        advance: () => !document.getElementById('actionPanel').classList.contains('active'),
-        pulse: '#actionPanel [data-act="play"]',
-        title: 'Your Reveal — Choose Its Fate',
+        id: 'reveal-hunting', ready: () => panelActive(), target: '#actionPanel',
+        advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
+        title: 'Your Reveal — Play It',
         text: `Cards reveal in table order. This panel is your whole turn: <b>Play</b> it
-               (pay the top-left cost, keep the gold ovals forever) — or <b>Discard</b> it
-               for +3 Gold or a free ring slide. Hit <b>Play</b>: those 2 Survival are
-               yours for the rest of the game.`,
-        why: 'The action panel is where every turn is decided; teaching Play and naming Discard here means the next step (discarding) is already half-taught. "Skills stay all game" is repeated deliberately.',
+               (pay the top-left cost, keep the gold ovals for the rest of the game) — or
+               <b>Discard</b> it for +3 Gold or a free ring slide. Hit <b>Play</b>: those
+               2 Survival are yours to keep.`,
+        why: 'The action panel decides every turn; Play now, Discard named for later.',
     },
+
+    // ══════════ TURN 2 — WEAPON (Power feeds the Melee) ══════════
     {
-        ready: () => game.phase === 'gameplay' && game.pendingActivations[0] === null && !document.getElementById('actionPanel').classList.contains('active'),
-        id: 'discard-turn', target: '#handZone',
-        onReady: () => { rigTurn(['Cooking']); },
+        id: 'weapon-turn', ready: () => gameplayIdle(), target: '#handZone',
+        onReady: () => rigTurn(['Shark Tooth']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
-        title: 'Not Every Card Is For You',
-        text: `New turn — and look: your hand changed! That's the pass. Now, <b>Cooking</b>
-               needs 1 Knowledge and you have none — no green glow. Cards like that still
-               have value: throw one anyway and we'll turn it into Gold.`,
-        why: 'Two lessons at once: proof the pass-left really happened, and the grey (no-glow) state — setting up the discard economy.',
+        title: 'A Weapon — Power for the Melee',
+        text: `Your hand passed and changed. This is <b>Shark Tooth</b>, a <b>Weapon</b> —
+               it grants ⚔ <b>Power</b>. At the end of each Act every heir's total Power
+               clashes in the <b>Melee</b>, and the strongest win Prestige. Throw Shark
+               Tooth and start building your strength.`,
+        why: 'Introduces the Weapon type and the Melee it feeds, one Act before that Melee lands.',
     },
     {
-        ready: () => document.getElementById('actionPanel').classList.contains('active'),
-        id: 'discard-panel', target: '#actionPanel',
-        advance: () => !document.getElementById('actionPanel').classList.contains('active'),
-        pulse: '#actionPanel [data-act="discard"]',
-        title: 'Discard = Gold or Movement',
-        text: `Can't play it? Every card is still worth <b>+3 Gold</b> — or a free
-               <b>ring slide</b> on your board. (If a card only lacks SKILLS, you can also
-               <b>Borrow</b> them from a neighbor at 2 Gold each — they pocket the fee.)
-               For now, take the gold.`,
-        why: "The discard economy keeps bad hands fun, and borrowing must be named exactly here — on a card that can't be played — or players never connect the two.",
+        id: 'weapon-play', ready: () => panelActive(), target: '#actionPanel',
+        advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
+        title: 'Bank the Power',
+        text: `Play it — what you build now, you carry into the Melee. Your Power is climbing.`,
+        why: 'Closes the second guided play; frames Power as cumulative.',
+    },
+
+    // ══════════ SLIDER DETOUR — the board ring ══════════
+    {
+        id: 'board-tour', target: '#boardThumb', advance: 'click', delay: 800,
+        title: 'Visit Your Board',
+        text: `Quick detour — <b>tap your board</b> to see the ring up close.`,
+        why: 'Hands-on transition into the slider lesson.',
     },
     {
-        ready: () => game.phase === 'gameplay' && game.pendingActivations[0] === null && !document.getElementById('actionPanel').classList.contains('active'),
-        id: 'mission-turn', target: '#handZone',
+        id: 'slider', ready: () => overlayActive('#boardOverlay'), target: '#boardOverlay',
+        advance: () => !overlayActive('#boardOverlay'),
+        title: 'The Ring & the Slider',
+        text: `Five slots. Your ring can slide for <b>5 Gold a space</b> (or free, when you
+               discard for a slide). Land on a slot and it pays: gold coins pay Gold, skill
+               crests grant skills while you stand there, and event slots — like the
+               Bandit's <b>steal from everyone</b> — fire as you arrive. Drag the ring to
+               peek, then close the board (✕ or tap outside) to go on.`,
+        why: 'The slider is half of every board decision — taught in the real overlay with the real ring.',
+    },
+
+    // ══════════ TURN 3 — MISSION LETTER (claim a mission) ══════════
+    {
+        id: 'mission-turn', ready: () => gameplayIdle(), target: '#handZone',
         onReady: () => { rigTurn(['Mission Letter']); rigMissions(); },
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'The Mission Letter',
-        text: `This turn you drew a <b>Mission Letter</b> — throw it. Letters are how you
-               claim a mission from the pool for 1 Gold.`,
-        why: 'Rigged so the letter arrives exactly when the concept is fresh from step 4. One action, one concept.',
+        text: `This turn you drew a <b>Mission Letter</b> — throw it. A Letter is how you
+               claim one of the face-up missions for 1 Gold.`,
+        why: 'Rigged so the Letter arrives exactly when the concept is fresh.',
     },
     {
-        ready: () => document.getElementById('actionPanel').classList.contains('active'),
-        id: 'mission-panel', target: '#actionPanel',
-        advance: () => document.getElementById('missionSelect') && document.getElementById('missionSelect').classList.contains('active'),
-        pulse: '#actionPanel [data-act="mission_letter"]',
+        id: 'mission-panel', ready: () => panelActive(), target: '#actionPanel',
+        advance: () => overlayActive('#missionSelect'), pulse: '#actionPanel [data-act="mission_letter"]',
         title: 'Send the Letter',
-        text: `Pay the 1 Gold. You'll pick from the three face-up missions.`,
-        why: 'Bridges the letter to the pick. Kept to two sentences — the real teaching happens on the pick screen.',
+        text: `Pay the 1 Gold — then you'll choose from the three face-up missions.`,
+        why: 'Bridges the letter to the pick; the real teaching is on the pick screen.',
     },
     {
-        ready: () => document.getElementById('missionSelect') && document.getElementById('missionSelect').classList.contains('active'),
-        id: 'mission-pick',
-        // Spotlight ONLY Helping the Merchant — the whole point of a guided
-        // pick is that the player can't grab the wrong mission.
+        id: 'mission-pick', ready: () => overlayActive('#missionSelect'),
         target: () => {
             const img = document.querySelector('#missionSelect img[src*="Helping"]');
-            return (img && (img.closest('.mission-option') || img.closest('[onclick]') || img.parentElement))
+            return (img && (img.closest('.mission-option') || img.parentElement))
                 || document.getElementById('missionSelect');
         },
-        advance: () => !(document.getElementById('missionSelect') && document.getElementById('missionSelect').classList.contains('active')),
-        title: 'Choose: Helping the Merchant',
-        text: `Read a mission like a card: <b>top-left = what it takes to succeed</b>
-               (3 Survival & 3 Power), <b>top-right = the reward</b> (Gold, a skill — and
-               a <b>Map</b>, remember that), and the <b>grey bottom = what failing costs
-               you</b>. Take <b>Helping the Merchant</b> — your Hunting survival plus your
+        advance: () => !overlayActive('#missionSelect'),
+        title: 'Read a Mission — Take Helping the Merchant',
+        text: `A mission reads like a card: <b>top-left = what it takes to succeed</b>
+               (3 Survival & 3 Power), <b>top-right = the reward</b> (Gold, a skill, and a
+               <b>Map</b> — remember that), and the <b>grey bottom = what failing costs
+               you</b>. Take <b>Helping the Merchant</b> — your Hunting Survival and your
                board's Power put it in reach.`,
-        why: "Mission-card anatomy exactly when they must read one for real, plus strategy modeling: the tutorial shows WHY this mission is achievable with what they already hold. The Map tease pays off in Act 2.",
+        why: 'Mission-card anatomy exactly when they must read one, plus modelling WHY this one is achievable. The Map pays off in Act 2.',
     },
     {
-        id: 'mission-held', target: '.mission-strip', advance: 'next',
-        title: 'Yours Now — Resolve at Act’s End',
-        text: `The mission is yours, face-down. Missions resolve when the Act ends: meet
-               the requirement then and the reward is yours — <b>you can even borrow
-               skills for it</b>. Miss it, and the grey consequence bites.`,
-        why: 'Sets the timing expectation (nothing happens immediately) so the missions phase later is anticipated, not surprising.',
+        id: 'mission-held', ready: () => gameplayIdle(), target: '.mission-strip', advance: 'next',
+        title: "Yours Now — Resolves at Act's End",
+        text: `The mission is yours, held face-down. Missions resolve when the Act ends:
+               meet the requirement then and the reward is yours — and you may even
+               <b>borrow skills</b> to get there. Fall short and the grey consequence bites.`,
+        why: 'Sets the timing expectation so the missions phase is anticipated, not surprising.',
     },
+
+    // ══════════ TURN 4 — ENDEAVOR (finish the mission requirement) ══════════
     {
-        ready: () => game.phase === 'gameplay' && game.pendingActivations[0] === null && !document.getElementById('actionPanel').classList.contains('active'),
-        id: 'power-turn', target: '#handZone',
-        onReady: () => rigTurn([c => c.act === 1 && (c.skills || []).includes('power'),
-                               c => c.act === 1 && (c.skills || []).includes('survival') && c.name !== 'Hunting']),
+        id: 'build-turn', ready: () => gameplayIdle(), target: '#handZone',
+        onReady: () => rigTurn(['First Aid']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
-        title: 'Build Toward the Melee',
-        text: `At the end of every Act comes the <b>Melee</b> — every heir's total
-               <b>Power</b> clashes, and the strongest win <b>Prestige</b>. Throw a card
-               with a ⚔ Power oval (or more Survival for your mission) and play it.`,
-        why: 'Announces the melee one turn before the fast-forward so the player is building toward something, and doubles as mission-requirement progress.',
+        title: 'Keep Building',
+        text: `<b>First Aid</b> grants 1 more Survival. Play it and you'll hold
+               <b>3 Survival</b> — exactly what Helping the Merchant needs. Throw it in.`,
+        why: 'Lands the third Survival so the mission visibly succeeds later; reinforces skills stacking toward a goal.',
     },
     {
-        ready: () => document.getElementById('actionPanel').classList.contains('active'),
-        id: 'power-panel', target: '#actionPanel',
-        advance: () => !document.getElementById('actionPanel').classList.contains('active'),
-        pulse: '#actionPanel [data-act="play"]',
-        title: 'Bank It',
-        text: `Play it — what you build now, you bring to the Melee.`,
-        why: 'Closes the fourth guided play without re-teaching the panel; without this step the shield would strand the reveal.',
+        id: 'build-play', ready: () => panelActive(), target: '#actionPanel',
+        advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
+        title: 'Play It',
+        text: `Play it — that's <b>3 Survival</b> and <b>3 Power</b> banked. Your mission is
+               in reach.`,
+        why: 'Confirms the requirement is met before the resolution.',
+    },
+
+    // ══════════ TURN 5 — DISCARD & BORROW (the bad-hand economy) ══════════
+    {
+        id: 'discard-turn', ready: () => gameplayIdle(), target: '#handZone',
+        onReady: () => rigTurn(['Cooking']),
+        advance: () => game.pendingActivations[0] !== null, pad: 16,
+        title: 'Not Every Card Is For You',
+        text: `<b>Cooking</b> needs 1 Knowledge — you have none, so no green glow. Cards you
+               can't use still have value. Throw it and we'll turn it into Gold.`,
+        why: 'Teaches the no-glow (grey) state on a genuinely unplayable card, setting up the discard economy.',
     },
     {
-        ready: () => game.phase === 'gameplay' && !document.getElementById('actionPanel').classList.contains('active'),
-        id: 'board-tour', target: '#boardThumb', advance: 'click', delay: 800,
-        title: 'Visit Your Board',
-        text: `Quick detour — <b>tap your board</b>.`,
-        why: 'Hands-on transition into the slider lesson; a tap they perform beats a picture.',
+        id: 'discard-panel', ready: () => panelActive(), target: '#actionPanel',
+        advance: () => !panelActive(), pulse: '#actionPanel [data-act="discard"]',
+        title: 'Discard = Gold or Movement',
+        text: `Can't play it? Every card is still worth <b>+3 Gold</b> — or a free
+               <b>ring slide</b>. (If a card only lacks SKILLS, you can instead
+               <b>Borrow</b> them from a neighbour at 2 Gold each.) Take the Gold.`,
+        why: "The discard/borrow economy keeps bad hands fun; borrow is named on a card that can't be played.",
     },
+
+    // ══════════ TURN 6 — THE LAST TWO ══════════
     {
-        ready: () => document.getElementById('boardOverlay').classList.contains('active'),
-        id: 'slider', target: '#boardOverlay',
-        advance: () => !document.getElementById('boardOverlay').classList.contains('active'),
-        title: 'The Ring & the Slider',
-        text: `Five slots. Your ring can slide for <b>5 Gold a space</b> (or free, when you
-               discard for a slide). Slots pay out when you LAND: gold coins pay gold,
-               skill crests grant skills while you stand there, and event slots — like the
-               Bandit's <b>steal from everyone</b> — fire as you arrive. Drag the ring to
-               peek, then close the board (✕ or tap outside) to continue.`,
-        why: 'The slider is half of every board decision. Taught inside the real overlay with the real draggable ring; closing it is the natural advance.',
+        id: 'final-turn', mode: 'watch',
+        advance: () => game.phase !== 'gameplay' || you().hand.length === 0,
+        title: 'Play Out the Act',
+        text: `Down to your last cards — when only two remain you play <b>both</b> at once.
+               Commit them and let the reveals run. That's the whole draft: play one, pass
+               the rest, until the Act empties.`,
+        why: 'Every turn is prompted, but the loop is learned — a watch beat carries the final plays without re-teaching the panel.',
     },
+
+    // ══════════ MISSIONS PHASE — hard-paced, narrated ══════════
     {
-        id: 'fast-forward', mode: 'watch',
-        before: function startFF() {
-            // Drive through gameplay AND reveal ('activate') cycles — exit only
-            // when Act 1's phases actually begin (missions/melee) or Act 2 starts.
-            fastForward(() => game.currentAct !== 1 || game.phase === 'missions' || game.phase === 'melee', () => {});
-        },
-        advance: () => game.phase === 'missions' || game.phase === 'melee' || game.currentAct !== 1,
-        title: 'Playing On…',
-        text: `You've got the rhythm — I'll play your last few throws quickly.
-               Watch the table: skills piling up, gold moving, rivals scheming.`,
-        why: "Respecting the player's time: the loop is learned after four guided turns; forcing seven identical turns would teach boredom.",
-    },
-    {
-        id: 'missions-phase', mode: 'watch',
-        advance: () => game.phase === 'melee' || (document.getElementById('meleeSplash') && document.getElementById('meleeSplash').classList.contains('active')) || game.currentAct !== 1,
+        id: 'missions-phase', ready: () => game.phase === 'missions', mode: 'watch',
+        advance: () => game.phase === 'melee' || game.currentAct !== 1,
         title: 'The Missions Phase',
-        text: () => `Act 1 ends — missions resolve around the table, starting from the
-               Emblem holder. Yours needs 3 Survival & 3 Power…
-               ${you().skills.survival >= 3 ? 'and you have it. Watch the reward land — including that <b>Map</b>.' : 'watch closely — if you fall short, the grey consequence fires (and next game you’ll know to borrow!).'}`,
-        why: 'Dynamic text: celebrates the success we engineered, but stays honest if the run went sideways — either way the resolution mechanic is narrated as it happens.',
+        text: `The Act is over — now every heir's mission resolves, one at a time, starting
+               from the Emblem holder. Nothing rushes past: <b>tap each card to reveal
+               it.</b> Meet the requirement and the reward lands (yours pays Gold, a skill,
+               and the <b>Map</b>); fall short and the grey consequence fires. Watch yours
+               succeed.`,
+        why: 'Frames the real ceremony (already tap-paced) and points out the player\'s own success — Wyatt: the phase must slow and be explained.',
     },
+
+    // ══════════ MELEE PHASE — hard-paced, narrated ══════════
     {
-        id: 'melee-watch', mode: 'watch',
-        advance: () => game.phase === 'gameplay' && game.currentAct === 2,
+        id: 'melee-phase', ready: () => game.phase === 'melee', mode: 'watch',
+        advance: () => game.currentAct >= 2,
         title: 'THE MELEE',
-        text: `Every heir's Power, head to head — weapons, board slots, everything counts.
-               Tap <b>Continue ▸</b> to march through each fighter's tally. Prestige goes
-               to the podium: <b>5 / 3 / 1</b> in Act 1… and it triples by Act 3. You
-               can't borrow Power for the Melee — what you built is what you bring.`,
-        why: 'The melee cinematic is the game’s showpiece — the prompt frames what the numbers mean and plants the Act 2/3 escalation, then gets out of the way.',
+        text: `Every heir's Power, head to head — weapons, board slots, everything counts
+               (you can't borrow Power here — what you built is what you bring).
+               <b>Tap Continue</b> to march through each fighter's tally. Prestige pays the
+               podium <b>5 / 3 / 1</b> in Act 1… and it triples by Act 3.`,
+        why: 'The Melee is the showpiece; the prompt frames the numbers, then the real cinematic carries the pacing (tutorial forces wait-for-tap).',
     },
+
+    // ══════════ SLICE END ══════════
     {
-        ready: () => game.phase === 'gameplay' && game.currentAct === 2,
-        id: 'act2', target: '#handZone',
-        onReady: () => rigTurn(['Great North Connection']),
-        advance: 'next', pad: 16,
-        title: 'Act 2 — Higher Stakes',
-        text: `New act, new deck — see the border color change on your fresh hand. Cards
-               cost more and give more. The <b>Emblem</b> (who acts first) has passed one
-               seat left, too.`,
-        why: 'Act transition orientation: border colors, escalation, emblem movement — three small facts while the fresh hand is visibly different.',
-    },
-    {
-        id: 'orange-glow', target: '#handZone', advance: 'next', pad: 16,
-        pulse: '#handZone .hand-card.freeplay',
-        title: 'The Orange Glow',
-        text: () => heldMap('Helping the Merchant')
-            ? `Look — <b>Great North Connection</b> burns <b>orange</b>. Orange means
-               <b>FREE</b>: your mission's Map waives its whole cost. A Map always plays
-               its linked card for nothing — even if you could afford it the hard way.`
-            : `See a card burn <b>orange</b>? Orange means <b>FREE</b> — a Map you hold
-               waives its whole cost. Maps from missions and cards link to specific
-               cards; hold the Map, and its card costs you nothing.`,
-        why: 'The second explicit ask: the orange glow, taught with a map the player EARNED in Act 1. Free-because-you-earned-it lands harder than free-by-decree.',
-    },
-    {
-        ready: () => game.phase === 'gameplay' && game.pendingActivations[0] === null,
-        id: 'play-free', target: '#handZone',
-        // Early-throw-proof: the hand is spotlit one step earlier, so an
-        // eager player may already have thrown (or even played) the card.
-        advance: () => game.pendingActivations[0] !== null
-            || (you().playedCards || []).some(c => c.name === 'Great North Connection'),
-        pad: 16,
-        title: 'Cash It In',
-        text: `Throw Great North Connection and play it — free. It also opens a
-               <b>Trade Route</b>: from now on you can borrow Survival, Alchemy, Charisma
-               and Prospecting from <b>any</b> player at the table, not just neighbors.`,
-        why: 'Completes the map arc with the actual free play, and introduces the one borrowing upgrade (trade route) on the exact card that grants it.',
-    },
-    {
-        ready: () => document.getElementById('actionPanel').classList.contains('active')
-            || (you().playedCards || []).some(c => c.name === 'Great North Connection'),
-        id: 'free-panel', target: '#actionPanel',
-        advance: () => (you().playedCards || []).some(c => c.name === 'Great North Connection')
-            || !document.getElementById('actionPanel').classList.contains('active'),
-        pulse: '#actionPanel [data-act="play"]',
-        title: 'Not a Coin Leaves Your Purse',
-        text: `Play it. The Map pays — watch your Gold: it doesn't move.`,
-        why: 'The proof beat of the whole map arc: the player watches their own purse NOT change. Concrete evidence beats any explanation.',
-    },
-    {
-        id: 'resources', target: null, advance: 'next',
-        title: 'The Rare Treasures',
-        text: `Two resources gate the mightiest cards: <b>Mind's Eye</b> 👁 and the
-               <b>Philosopher's Stone</b> ⚗. They come only from certain cards, missions
-               and board slots — and they can <b>never be borrowed</b>. When a card's
-               top-left shows one, only the real thing opens it.`,
-        why: "Mind's Eye and the Stone appear on card costs from mid-game on — naming them prevents the “why can't I borrow this?” confusion later.",
-    },
-    {
-        id: 'scoring', target: null, advance: 'next',
-        title: 'How the Crown Is Won',
-        text: `After Act 3's Melee, the count: <b>mission Favor + card Favor (blue
-               shields) + your board's Favor slots + Prestige − Scorn</b>. Gold breaks
-               ties. Everything you did today fed one of those numbers.`,
-        why: 'The full scoring formula, phrased as a recap of things they already touched — each term maps to a beat from this tutorial.',
-    },
-    {
-        id: 'recap-glows', target: '#handZone', advance: 'next', pad: 16,
-        title: 'Remember the Glows',
-        text: `<span class="tut-green">Green</span> = you can play it right now.
-               <span class="tut-orange">Orange</span> = it's FREE (a Map or a board boon
-               pays for you). No glow = you're missing something — read the top-left,
-               then think about borrowing.`,
-        why: 'One final side-by-side of the two glows — the visual language the whole interface speaks. Redundancy on the two asks the design called out by name.',
-    },
-    {
-        id: 'go-play', target: null, advance: 'next',
-        title: 'You’re Ready',
-        text: `Acts 2 and 3 are yours to finish — keep playing this table, or start
-               fresh. The court remembers the bold. <b>Good luck, heir.</b>`,
-        why: 'Ends on agency: the tutorial table is a real game they can keep playing, which is the strongest possible “you now know how” statement.',
+        id: 'act1-done', target: null, advance: 'next',
+        title: 'Act 1 Complete',
+        text: `You've played the whole loop: read cards, built skills and Power, claimed and
+               resolved a mission, and fought the Melee. Acts 2 and 3 raise the stakes —
+               new card types, <b>Maps</b> that play cards for free, and the grand final
+               score. <b>That part is coming next.</b>`,
+        why: 'Closes the Act 1 slice; sets up Acts 2 & 3 (built next). Placeholder finale until the full game is scripted.',
     },
     ];
 
@@ -623,6 +642,7 @@
         game.initPlayers(CAST);
         game.emblemHolder = 0;
         game.startAct(1);
+        game.phase = 'gameplay';   // arm the throw phase (beginThrowPhase early-returns otherwise)
         rigMissions();
         addLogEntry('═══ How to Play — a guided game ═══');
         showGameScreen();
@@ -630,8 +650,17 @@
 
         buildDom();
         active = true;
+        // The tutorial owns pacing — this flag tells showMeleeSplash to WAIT
+        // for a tap instead of auto-closing, so the Melee can be narrated.
+        window.TUT_ACTIVE = true;
+        // Silence the in-game coach-marks (Prong 2) — they'd fire a SECOND
+        // tutorial overlay on top of this one. coachTick early-returns on this.
+        window._coachOff = true;
         tick = setInterval(layout, 300);
         showStep(0);
+        // Arm turn 1 exactly like a real act start: rivals think, then commit;
+        // the player drags to throw when the script reaches the throw step.
+        beginThrowPhase();
     }
 
     // goto('step-id') — review/debug seam: jump the guide to any step.

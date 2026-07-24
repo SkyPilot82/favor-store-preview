@@ -278,89 +278,14 @@ function showMiniSpotlight(card, action) {
     });
 }
 
-// ─── EFFECT FLOAT SYSTEM ─────────────────────────────────
-
-function showEffectFloat(text, cssClass, anchorEl) {
-    const speed = window.CINEMATIC_SPEED;
-    const container = document.getElementById('effectFloats');
-    if (!container) return;
-
-    const float = document.createElement('div');
-    float.className = `effect-float ${cssClass}`;
-    float.textContent = text;
-
-    // Position near the anchor element or center screen
-    if (anchorEl) {
-        const rect = anchorEl.getBoundingClientRect();
-        float.style.left = `${rect.left + rect.width / 2}px`;
-        float.style.top = `${rect.top}px`;
-        float.style.transform = 'translateX(-50%)';
-    } else {
-        float.style.left = '50%';
-        float.style.top = '45%';
-        float.style.transform = 'translateX(-50%)';
-    }
-
-    container.appendChild(float);
-
-    setTimeout(() => float.remove(), 1500 * speed);
-}
-
-// ─── STAT CHANGE TRACKING & ANIMATION ────────────────────
-
-let _prevStats = null;
-
-function captureStats() {
-    if (!game) return;
-    const p = game.players[0];
-    _prevStats = {
-        gold: p.gold,
-        prestige: p.prestige,
-        scorn: p.scorn,
-        favor: game.currentFavor(0)   // held favor — jumps when a Favor card lands
-    };
-}
-
-function animateStatChanges() {
-    if (!game || !_prevStats) return;
-    const p = game.players[0];
-    const bar = document.getElementById('bottomStats');
-    if (!bar) return;
-
-    const changes = [
-        { key: 'gold', prev: _prevStats.gold, curr: p.gold, cls: 'gold-change', label: 'Gold' },
-        { key: 'prestige', prev: _prevStats.prestige, curr: p.prestige, cls: 'prestige-change', label: 'Prestige' },
-        { key: 'scorn', prev: _prevStats.scorn, curr: p.scorn, cls: 'scorn-change', label: 'Scorn' },
-        { key: 'favor', prev: _prevStats.favor, curr: game.currentFavor(0), cls: 'favor-change', label: 'Favor' },
-    ];
-
-    changes.forEach(c => {
-        if (c.curr === c.prev) return;
-
-        const diff = c.curr - c.prev;
-        const sign = diff > 0 ? '+' : '';
-        const gainOrLoss = diff > 0 ? 'gain' : 'loss';
-
-        // Find the stat element in the bar
-        const statEls = bar.querySelectorAll('.stat');
-        statEls.forEach(el => {
-            if (el.classList.contains(c.key)) {
-                el.classList.remove('stat-pulse', 'stat-gain', 'stat-loss');
-                void el.offsetWidth; // Force reflow
-                el.classList.add('stat-pulse', `stat-${gainOrLoss}`);
-
-                setTimeout(() => {
-                    el.classList.remove('stat-pulse', 'stat-gain', 'stat-loss');
-                }, 500 * window.CINEMATIC_SPEED);
-            }
-        });
-
-        // Float text
-        showEffectFloat(`${sign}${diff} ${c.label}`, c.cls);
-    });
-
-    _prevStats = null;
-}
+// ─── STAT FLOATS ─────────────────────────────────────────
+// The centered showEffectFloat / captureStats / animateStatChanges system was
+// RETIRED 7/23: it painted every purse change at a fixed screen center (50%,
+// 45%) with no lane, so a card that moved two stats stacked "+3 Gold" and
+// "+3 Scorn" on the exact same pixel — the overlap Wyatt caught. The single
+// laned system below (statFloatFx / tvAnimateDeltas, ~L3800) now owns every
+// "+N" beat: it fans simultaneous grants into distinct lanes and paces the
+// reveal loop with statFloatWait().
 
 // ─── NOTIFICATIONS ────────────────────────────────────────
 
@@ -438,7 +363,7 @@ function toggleMusic() {
         btn.classList.add('muted');
         musicPlaying = false;
     } else {
-        audio.volume = 0.4;
+        audio.volume = window.FSET ? FSET.musicVolume() : 0.4;
         audio.play().catch(() => {});
         btn.classList.remove('muted');
         musicPlaying = true;
@@ -449,7 +374,7 @@ function toggleMusic() {
 document.addEventListener('click', function initMusic() {
     if (!musicPlaying) {
         const audio = document.getElementById('themeMusic');
-        audio.volume = 0.4;
+        audio.volume = window.FSET ? FSET.musicVolume() : 0.4;
         audio.play().then(() => {
             musicPlaying = true;
             document.getElementById('musicBtn').classList.remove('muted');
@@ -1747,6 +1672,9 @@ function resumeSoloSave() {
         window._gameMode = s.mode || null;
         window._rivalDef = s.rivalDef || null;
         if (s.skirmishSize) window._skirmishSize = s.skirmishSize;
+        // A resumed table records from HERE — the pre-reload decisions are
+        // gone with the old page. Marked so curation can drop partials.
+        if (window.FTEL) FTEL.begin(g, { mode: s.mode || 'queue', seed: null, resumed: true });
         window._uxThrownOnce = true;   // a returning table needs no gesture hint
         const ts = document.getElementById('title-screen');
         ts.classList.add('hidden');
@@ -1886,6 +1814,12 @@ async function buildSoloTable() {
     }
 
     game = new FavorGame(playerCount);
+    if (window.FALM) FALM.beginGame();   // fresh table — forfeit any unfinished game's almanac plays
+    // Solo tables run the seeded deal too now — still random per game, but
+    // the transcript records the seed, so any recorded game re-deals
+    // byte-identical through the engine later (telemetry, Hard-AI Phase 1).
+    const rngSeed = Math.floor(Math.random() * 0x7fffffff) || 1;
+    game.setSeed(rngSeed);
     game.loadDecks();
 
     // Bots draw from the heroes that were NOT offered to you — the other
@@ -1975,6 +1909,33 @@ async function buildSoloTable() {
         if (rp && rp.character) rp.gold += rp.character.startingGold || 0;
     }
 
+    // ── Hard seats (Hard-AI program §5d) ── The WANTED rival is always
+    // the sharp brain; a Play Now table guarantees exactly ONE hard
+    // opponent — the highest-rated seated persona, else the first bot
+    // (name and flavor unchanged: silent difficulty). Skirmish stays the
+    // casual tier the community likes.
+    if (mode === 'rival' && window._rivalDef) {
+        const rp = game.players.find(p => p.name === window._rivalDef.name);
+        if (rp) rp._aiLevel = 'hard';
+    } else if (mode === 'skirmish' && window._skirmishHard) {
+        // Skirmish HARD (Wyatt 7/24): the door's explicit choice — EVERY
+        // bot runs the sharp brain. The default door stays the casual
+        // tier the community likes; audit rigs never set the flag.
+        game.players.forEach((p, i) => { if (i !== 0) p._aiLevel = 'hard'; });
+    } else if (!mode && window._pinEmblemSeed === undefined) {
+        // (_pinEmblemSeed = the audit rigs' deterministic-table seam — a
+        // pinned table keeps the four classic casual bots; hard-seat
+        // coverage lives in the arena and the telemetry probes.)
+        let hardSeat = null;
+        if (seatedPersonas.length) {
+            hardSeat = seatedPersonas.slice().sort((a, b) =>
+                ((b.def.rating || 0) - (a.def.rating || 0)) || (a.seat - b.seat))[0].seat;
+        } else if (playerCount > 1) {
+            hardSeat = 1;
+        }
+        if (hardSeat !== null && game.players[hardSeat]) game.players[hardSeat]._aiLevel = 'hard';
+    }
+
     // ── Rated Emblem start: the highest rating at the table holds it in
     // Act 1. Rated = you (your favor/players row exists) or a seated
     // persona; ties break human-first, then lower seat. Nobody rated →
@@ -2014,6 +1975,10 @@ async function buildSoloTable() {
     }
 
     document.getElementById('character-select').classList.remove('active');
+
+    // Seats are wired \u2014 open the game's decision transcript before Act 1
+    // deals a single card (telemetry, Hard-AI Phase 1).
+    if (window.FTEL) FTEL.begin(game, { mode: mode || 'queue', seed: rngSeed });
 
     game.startAct(1);
     addLogEntry('\u2550\u2550\u2550 Act 1 begins \u2550\u2550\u2550');
@@ -2144,6 +2109,7 @@ async function startMpGame({ game: rec, mySeat }) {
         showNotification(`The match formed \u2014 ${hc ? hc.name : 'your hero'} answers the call.`, 'act');
     }
     game = new FavorGame(n);
+    if (window.FALM) FALM.beginGame();   // fresh table — forfeit any unfinished game's almanac plays
     game.setSeed(rec.seed);
     game.setDealOffset(mySeat);   // chunk k stays with canonical seat k
     game.loadDecks();
@@ -2173,6 +2139,9 @@ async function startMpGame({ game: rec, mySeat }) {
             gp._personaUid = r.personaUid;
             gp._personaAI = { key: r.persona, strong: (r.strong || []).slice() };
         }
+        // Hard seats ride the SHARED record (Hard-AI §5d) so every client
+        // simulates the same brain — never a human row, whatever the record says.
+        if (r.aiLevel === 'hard' && !r.human) gp._aiLevel = 'hard';
     }
     game.setEmblemHolder(FMP.localIdx(rec.emblemSeat));
 
@@ -2184,6 +2153,9 @@ async function startMpGame({ game: rec, mySeat }) {
     if (window.FMODES) FMODES.attachEmotes();
 
     document.getElementById('character-select').classList.remove('active');
+    // Seats are wired — open the game's decision transcript before Act 1
+    // deals. Every client records; only the host uploads at scoring.
+    if (window.FTEL) FTEL.begin(game, { mode: rec.room ? 'room' : 'queue', seed: rec.seed });
     game.startAct(1);
     addLogEntry('\u2550\u2550\u2550 Act 1 begins \u2550\u2550\u2550');
     showNotification('Act 1 Begins \u2014 Choose wisely.', 'act');
@@ -2347,6 +2319,18 @@ async function mpActivateRemote(pi, card, cardIdx) {
             const res = game.applySlotPick(pi, skill);
             if (res && res.success) addLogEntry(`${p.name} picks +1 ${res.skill} from their board`);
         }
+        if (p._pendingConvert) {
+            p._pendingConvert = null;
+            mpWaitShow(pi, 'at the counting house');
+            const pick = await FMP.waitFor(cs, 'slot_convert');
+            mpWaitHide();
+            // Booted/silent seat: every client falls back to the SAME deterministic
+            // heuristic, so the purse moves identically and lockstep holds.
+            const doConv = pick ? !!pick.convert : game.aiWouldConvert(p);
+            const res = game.applyGoldConvert(pi, doConv);
+            if (res.converted) addLogEntry(`${p.name} converts ${res.converted} Gold into ${res.converted} Prestige`);
+            else addLogEntry(`${p.name} keeps their Gold`);
+        }
     }
     if (slidAny) renderGameState();
 
@@ -2501,6 +2485,20 @@ async function mpActivateRemote(pi, card, cardIdx) {
         const res = game.applySlotPick(pi, skill);
         if (res && res.success) addLogEntry(`${p.name} picks +1 ${res.skill} from their board`);
     }
+    // Merchant counting house for a remote human \u2014 drained after the whole
+    // action chain so it covers every branch that lands their ring on the slot
+    // (a discard-slide, or Chemical X moving it free). A booted/silent seat
+    // falls back to the SAME deterministic heuristic on every client.
+    if (p._pendingConvert) {
+        p._pendingConvert = null;
+        mpWaitShow(pi, 'at the counting house');
+        const pick = await FMP.waitFor(cs, 'slot_convert');
+        mpWaitHide();
+        const doConv = pick ? !!pick.convert : game.aiWouldConvert(p);
+        const res = game.applyGoldConvert(pi, doConv);
+        if (res.converted) addLogEntry(`${p.name} converts ${res.converted} Gold into ${res.converted} Prestige`);
+        else addLogEntry(`${p.name} keeps their Gold`);
+    }
 }
 
 // \u2500\u2500 Held missions, canonical order \u2014 runs BEFORE resolveMissions \u2500\u2500
@@ -2576,7 +2574,10 @@ async function mpEndActStages(borrowsPendingLocal) {
                     // a different one here would fork the tables. A booted seat
                     // sends nothing, and every client then falls back to the
                     // same deterministic first-available plan.
-                    const chosen = (mv && Array.isArray(mv.borrowFrom)) ? mv.borrowFrom : null;
+                    const chosen = (mv && Array.isArray(mv.borrowFrom))
+                        ? mv.borrowFrom.map(b => ({ skill: b.skill,
+                            neighborIndex: FMP.localIdx(b.lender) }))
+                        : null;
                     const res = game.completeMissionWithBorrow(li, idx, chosen);
                     // The borrow could not close the gap after all. That is a
                     // real failure with real consequences — give it the same
@@ -2600,6 +2601,24 @@ async function mpEndActStages(borrowsPendingLocal) {
             }
         }
     }
+    // Duplicates — Mirror Gate / Wild Experiments winners choose their
+    // copy, in canonical order; a booted seat falls to the shared argmax.
+    for (let cs = 0; cs < n; cs++) {
+        const li = FMP.localIdx(cs);
+        const p = game.players[li];
+        if (!p._pendingDuplicatePick) continue;
+        if (li === 0) {
+            await showDuplicatePicker();             // publishes inside
+        } else {
+            mpWaitShow(li, 'choosing a card to duplicate');
+            const mv = p._remoteHuman ? await FMP.waitFor(cs, 'dup_pick') : null;
+            mpWaitHide();
+            const res = game.applyDuplicatePick(li, mv ? mv.cardId : null);
+            if (res && res.success) addLogEntry(`${p.name} duplicates ${res.source.name}`);
+        }
+        renderGameState();
+    }
+
     // Penalty discards \u2014 the failed owners pick which cards to give up.
     for (let cs = 0; cs < n; cs++) {
         const li = FMP.localIdx(cs);
@@ -2979,15 +2998,15 @@ function buildStatsPanelHtml(playerIndex, state) {
 
     // Special abilities: Philosopher's Stone & Mind's Eye -- the engine
     // count (cards + slot + mission rewards), shown as the digit it is.
-    const hasPhilosopher = gp.philosopherStone && gp.philosopherStone > 0;
+    const stoneCount = game.getStoneCount(playerIndex);
     const mindsEyeCount = game.getMindsEyeCount(playerIndex);
 
-    if (hasPhilosopher) {
+    if (stoneCount > 0) {
         skillsHtml += `
-            <div class="skill-row special-ability" title="Philosopher's Stone — converts your Gold to Favor at game end (×${gp.philosopherStone} per Gold)">
+            <div class="skill-row special-ability" title="Philosopher's Stone — a requirement token; a board slot's stone counts only while your ring stands there">
                 <span class="skill-icon">${SKILL_ICONS.philosopher}</span>
                 <span class="skill-label phil-label">Philosopher's Stone</span>
-                <span class="skill-value has-skill">${gp.philosopherStone}</span>
+                <span class="skill-value has-skill">${stoneCount}</span>
             </div>`;
     }
     if (mindsEyeCount > 0) {
@@ -3039,10 +3058,11 @@ function buildStatChipsHtml(playerIndex, state) {
                     <span class="flex-pair">${SKILL_ICONS[a]}${SKILL_ICONS[b]}</span><b>${n > 1 ? '×' + n : '✦'}</b></span>`;
     });
 
-    if (gp.philosopherStone && gp.philosopherStone > 0) {
+    const tvStones = game.getStoneCount(playerIndex);
+    if (tvStones > 0) {
         h += `<span class="tv-skill-chip special"
-                    onclick="tvChipTip(event, 'Philosopher\\'s Stone ×${gp.philosopherStone} — converts Gold to Favor at game end')">
-                    ${SKILL_ICONS.philosopher}<b>${gp.philosopherStone}</b></span>`;
+                    onclick="tvChipTip(event, 'Philosopher\\'s Stone \u00d7${tvStones} \u2014 requirement token; slot stones count while parked there')">
+                    ${SKILL_ICONS.philosopher}<b>${tvStones}</b></span>`;
     }
     const mindsEye = game.getMindsEyeCount(playerIndex);
     if (mindsEye > 0) {
@@ -3425,14 +3445,14 @@ function renderTvSkills(state) {
         rows++;
     });
 
-    const hasPhil = gp.philosopherStone && gp.philosopherStone > 0;
+    const myStones = game.getStoneCount(0);
     // Engine count (cards + slot + mission rewards) — the digit Wyatt
     // asked for; the old ✓ also missed slot-granted Mind's Eyes entirely.
     const mindsEye = game.getMindsEyeCount(0);
-    if (hasPhil) {
+    if (myStones > 0) {
         h += `<span class="tv-skill-chip special"
-                    onclick="tvChipTip(event, 'Philosopher\\'s Stone ×${gp.philosopherStone} — converts Gold to Favor at game end')">
-                    ${SKILL_ICONS.philosopher}<b>${gp.philosopherStone}</b></span>`;
+                    onclick="tvChipTip(event, 'Philosopher\\'s Stone \u00d7${myStones} \u2014 requirement token; slot stones count while parked there')">
+                    ${SKILL_ICONS.philosopher}<b>${myStones}</b></span>`;
         rows++;
     }
     if (mindsEye > 0) {
@@ -3548,6 +3568,11 @@ function renderTvStage(state) {
     const el = document.getElementById('tvStage');
     if (!el) return;
     const cards = state.players[0].playedCards || [];
+    // 5+ families: thinner piles and a left-anchored scrollable strip — a
+    // fixed centered row slid the tail pile under the board thumb, where
+    // it could never be tapped (Wyatt 7/23).
+    const fams = new Set(cards.map(getCardTypeGroup)).size;
+    el.classList.toggle('dense', fams >= 5);
     el.innerHTML = cards.length
         ? buildSkillStacks(cards)
         : '<div class="tv-stage-empty">Cards you play gather here</div>';
@@ -3785,8 +3810,12 @@ function statFloatFx(anchor, key, amount, idx) {
     // Purse tokens share one row — fan simultaneous floats out sideways.
     const fan = anchor.closest('.resource-tokens') ? (idx || 0) * 34 : 0;
     const el = document.createElement('div');
-    el.className = `stat-float${key === 'scorn' ? ' bad' : ''}`;
-    el.textContent = `+${amount}`;
+    // "Bad" = the change hurts you: scorn going UP, or a purse total going
+    // DOWN. Gains read gold, the rest read red, and the sign is explicit so a
+    // mixed gain+loss play (e.g. +Gold, −5 for a paid slide) is unambiguous.
+    const bad = key === 'scorn' ? amount > 0 : amount < 0;
+    el.className = `stat-float${bad ? ' bad' : ''}`;
+    el.textContent = amount > 0 ? `+${amount}` : `${amount}`;
     el.style.left = `${baseX + fan}px`;
     el.style.top = `${r.top + r.height / 2}px`;
     el.style.animationDuration = `${1.55 * window.CINEMATIC_SPEED}s`;
@@ -3874,11 +3903,15 @@ function tvAnimateDeltas(state) {
         // narrates those with tvDropToken on your seat chip below.
         if (prev && i === 0) {
             let n = 0;
-            const bump = (key, d) => {
-                if (d > 0) statFloatFx(_statAnchor(key), key, d, n++);
+            // Each fired float takes the NEXT lane (n++), so a card that moves
+            // several stats at once fans them out — never a stack. Purse totals
+            // float on gains AND losses (a paid slide's −5g still reads); skills
+            // float on gains only (the "+N goes up" payoff beat).
+            const bump = (key, d, showLoss) => {
+                if (d > 0 || (showLoss && d < 0)) statFloatFx(_statAnchor(key), key, d, n++);
             };
-            if (!animate) ['gold', 'prestige', 'scorn', 'favor'].forEach(k => bump(k, curr[k] - prev[k]));
-            Object.keys(curr.skills).forEach(k => bump(k, curr.skills[k] - ((prev.skills || {})[k] || 0)));
+            if (!animate) ['gold', 'prestige', 'scorn', 'favor'].forEach(k => bump(k, curr[k] - prev[k], true));
+            Object.keys(curr.skills).forEach(k => bump(k, curr.skills[k] - ((prev.skills || {})[k] || 0), false));
         }
 
         if (prev && animate) {
@@ -4581,88 +4614,23 @@ function _mbApplyFocus() {
     if (!e) return;
     document.getElementById('missionLBLabel').textContent =
         e.m.name + (e.done ? ' — completed' : '');
-    // Turn In / Borrow attach to the focused card, held missions only
-    // (renderMissionLBTurnIn no-ops for realm/completed entries).
+    // The lightbox is view-only — this just clears any stale action row.
+    // Turn-ins live at the act-boundary mission phase now (Wyatt 7/23).
     renderMissionLBTurnIn(e.m.name);
 }
 
-// "Turn In Now" — a held mission may be cashed in during ANY act of its
-// window, the player's call. The button tells the truth (the check is
-// deterministic); failing on purpose asks for a second click.
+// The mission lightbox is VIEW-ONLY (Wyatt 7/23). Turn-ins happen ONLY at the
+// act-boundary mission phase — the attempt/hold chooser (postponableMissions →
+// showEarlyMissionChoice, asked every act a mission is in-window but not yet
+// due) and the due-date borrow chooser own every resolution. The old "Turn In
+// Now" / "Borrow & Complete" buttons let a held mission be cashed mid-act on a
+// whim, out of turn order; that anytime path is gone. The engine's
+// turnInMission / completeMissionWithBorrow stay — the chooser road still calls
+// them. This only clears any stale action row so the lightbox reads as a
+// browser, never an action surface.
 function renderMissionLBTurnIn(name) {
     const holder = document.getElementById('missionLBAction');
-    if (!holder) return;
-    holder.innerHTML = '';
-    if (!game || game.phase !== 'gameplay') return;
-    // Anytime-actions can't ride the round barrier — early turn-ins sit
-    // out of multiplayer v1; missions resolve at their due date instead.
-    if (mpActive()) return;
-    const p = game.players[0];
-    const mi = (p.missions || []).findIndex(m => m.name === name);
-    if (mi < 0) return;
-
-    const mission = p.missions[mi];
-    const due = game.missionDueAct(mission);
-    // PURE probe — the old checkMissionRequirements call CONSUMED a held
-    // Life Essence just to label this button; browsing N missions would
-    // have burned it N times over. Only the real turn-in may consume.
-    const { success } = game.probeMissionRequirements(0, mission);
-    const dueNote = due > game.currentAct
-        ? `<div class="mission-lb-due">Due at the end of Act ${due} — turn in any time before</div>` : '';
-    // Short only on borrowable skills? Turning in now can borrow them too —
-    // same 2g-per-unit deal the borrow chooser offers at the due date.
-    const plan = success ? null : game.missionBorrowPlan(0, mission);
-    holder.innerHTML = `${dueNote}
-        ${plan ? `<button class="btn-royal primary" id="missionBorrowIn">
-            <span>Borrow & Complete (−${plan.cost}g)</span>
-        </button>` : ''}
-        <button class="btn-royal${success ? ' primary' : ''}" id="missionTurnIn">
-            <span>${success ? '✓ Turn In Now — requirements met' : 'Turn In Now (you would FAIL)'}</span>
-        </button>`;
-    const borrowBtn = holder.querySelector('#missionBorrowIn');
-    if (borrowBtn) {
-        borrowBtn.onclick = (e) => {
-            e.stopPropagation();
-            closeMissionLB();
-            // An early borrow-and-complete used to toast and vanish; it now
-            // plays the same ceremony beat as every other resolution, and the
-            // lender's payment shows up in the beat's "Also affected" line.
-            missionBeat(0, mi, () => game.completeMissionWithBorrow(0, mi)).then(res => {
-                if (res && res.success) {
-                    addLogEntry(`You borrow skills (−${res.cost}g) and complete ${name}`);
-                } else {
-                    showNotification((res && res.error) || 'Borrow fell through', 'error');
-                }
-                renderGameState();
-            });
-        };
-    }
-    const btn = holder.querySelector('#missionTurnIn');
-    let armed = success; // failing on purpose takes two clicks
-    btn.onclick = (e) => {
-        e.stopPropagation();
-        if (!armed) {
-            armed = true;
-            btn.querySelector('span').textContent = 'Click again to fail it — penalties apply';
-            return;
-        }
-        closeMissionLB();
-        // A deliberate early turn-in — win or lose — is a real resolution and
-        // gets a real beat. Failing on purpose is a legitimate play, and its
-        // penalties (Scorn, forced discards, a Fortune Teller that wasn't
-        // there) were previously summarised as a one-line toast.
-        missionBeat(0, mi, () => game.turnInMission(0, mi)).then(res => {
-            addLogEntry(`You turn in ${name} — ${res && res.success ? 'success!' : 'failed'}`);
-            // Crazy Lou-style penalties: the discard picker follows the beat,
-            // so the player sees WHY they are being asked to discard.
-            const pend = game.players[0]._pendingPenaltyDiscard || 0;
-            if (pend) {
-                game.players[0]._pendingPenaltyDiscard = 0;
-                showPenaltyDiscardPicker(pend).then(() => renderGameState());
-            }
-            renderGameState();
-        });
-    };
+    if (holder) holder.innerHTML = '';
 }
 
 function closeMissionLB() {
@@ -5344,6 +5312,14 @@ async function payToSlide(direction) {
             renderBoardOvSlots();
         }
 
+        // Merchant slot: convert Gold → Prestige? Your call (Wyatt 7/23).
+        if (player._pendingConvert) {
+            player._pendingConvert = null;
+            await showConvertChoice();
+            renderGameState();
+            renderBoardOvSlots();
+        }
+
         // The slide can change what the revealed card needs — refresh the
         // chooser so Play/Need and the purse line tell the truth.
         if (window._cardChoiceRerender) window._cardChoiceRerender();
@@ -5364,9 +5340,6 @@ async function activateAllCards() {
 
         for (let cardIdx = 0; cardIdx < cards.length; cardIdx++) {
             const card = cards[cardIdx];
-
-            // Capture player 0's stats before activation for delta animation
-            if (pi === 0) captureStats();
 
             if (pi === 0) {
                 // YOUR reveal: the thrown card comes face up and you choose
@@ -5428,10 +5401,61 @@ async function activateAllCards() {
                 await showSlotSkillPicker();
             }
 
+            // Merchant counting house: the Gold→Prestige offer, drained wherever
+            // your ring lands on the slot — a discard-slide, the final-card
+            // chooser, or Chemical X moving it free (Wyatt 7/23).
+            if (pi === 0 && game.players[0]._pendingConvert) {
+                game.players[0]._pendingConvert = null;
+                renderGameState();
+                await showConvertChoice();
+            }
+
             if (pi !== 0 && game.players[pi]._remoteHuman) {
                 // Remote human — their streamed choice drives our engine
                 // at exactly this point in the order on every client.
                 await mpActivateRemote(pi, card, cardIdx);
+            } else if (pi !== 0 && window.FAI && FAI.isHard(game, pi)) {
+                // HARD seat (js/ai.js): the ring first — a paid slide can
+                // change what the reveal meets — then the EV-chosen action.
+                // Pure + deterministic, so lockstep clients simulate this
+                // seat identically at this same point in the order.
+                if (FAI.preSlide(game, pi) > 0) {
+                    addLogEntry(`${game.players[pi].name} pays gold to slide their ring`);
+                    renderGameState();
+                }
+                const dec = FAI.chooseAction(game, pi, card);
+                if (dec.action === 'mission_letter' && card.type === 'mission_letter'
+                    && game.players[pi].gold >= 1 && game.visibleMissions.length > 0) {
+                    await showCardSpotlight(pi, card, 'play');
+                    const result = game.activateCard(pi, card.id, 'mission_letter');
+                    if (result && result.chooseMission) {
+                        game.chooseMission(pi, FAI.bestMission(game, pi));
+                        addLogEntry(`${game.players[pi].name} uses a Mission Letter`);
+                    }
+                } else if (dec.action === 'play'
+                    && (dec.borrow || game.checkRequirements(pi, card).canPlay)) {
+                    await showCardSpotlight(pi, card, 'play');
+                    // Borrow-&-play rides the same engine road a human's
+                    // chooser takes; a stale plan falls back to the +3g
+                    // discard — identically on every lockstep client.
+                    const played = game.activateCard(pi, card.id, 'play', dec.borrow || []);
+                    if (played && played.success) {
+                        addLogEntry(dec.borrow
+                            ? `${game.players[pi].name} borrows and plays ${card.name}`
+                            : `${game.players[pi].name} plays ${card.name}`);
+                    } else {
+                        game.activateCard(pi, card.id, 'discard');
+                        addLogEntry(`${game.players[pi].name} discards ${card.name}`);
+                    }
+                } else if (dec.action === 'discard_slide' && (dec.dir === -1 || dec.dir === 1)) {
+                    await showCardSpotlight(pi, card, 'discard');
+                    game.activateCard(pi, card.id, 'discard_slide', dec.dir);
+                    addLogEntry(`${game.players[pi].name} discards ${card.name} to slide their ring`);
+                } else {
+                    await showCardSpotlight(pi, card, 'discard');
+                    game.activateCard(pi, card.id, 'discard');
+                    addLogEntry(`${game.players[pi].name} discards ${card.name}`);
+                }
             } else if (pi !== 0) {
                 // AI player
                 const isMissionLetter = card.type === 'mission_letter';
@@ -5466,9 +5490,9 @@ async function activateAllCards() {
                 }
             }
 
-            // Animate stat changes after each card resolves
+            // The "+N" payoff floats fire from renderGameState → tvAnimateDeltas,
+            // laned so simultaneous grants never stack (Wyatt 7/23).
             renderGameState();
-            animateStatChanges();
 
             // YOUR payoff gets its beat: if "+N" floats just fired off your
             // stats, let them land before the next player's spotlight takes
@@ -5615,6 +5639,10 @@ function personaMissionNeeds(playerIndex) {
 // flow through bonusSkills → skills, so feasibility sees them), plus a
 // nudge toward their signature skills.
 function aiBestMission(playerIndex) {
+    // Hard seats pick by two-branch EV — a mission worth LOSING is a
+    // legitimate take (js/ai.js). Booted humans never carry _aiLevel, so
+    // the AFK fallback through here stays the casual brain.
+    if (window.FAI && FAI.isHard(game, playerIndex)) return FAI.bestMission(game, playerIndex);
     const p = game.players[playerIndex];
     const persona = p && p._personaAI;
     let bestIdx = 0;
@@ -5646,6 +5674,13 @@ function aiBestMission(playerIndex) {
 function aiPickCard(playerIndex) {
     const player = game.players[playerIndex];
     if (!player.hand || player.hand.length === 0) return;
+
+    // Hard seats draft by expected final points (js/ai.js) — same
+    // game.pickCard funnel, so telemetry and lockstep see one road.
+    if (window.FAI && FAI.isHard(game, playerIndex)) {
+        FAI.pickCard(game, playerIndex);
+        return;
+    }
 
     // Persona layer: the permanent leaderboard rivals read the table
     // harder — cards feeding a held mission or their signature skills
@@ -5812,6 +5847,13 @@ async function endActPhases() {
     // PENALTY DISCARD — a failed mission says "Discard N Cards": the player
     // picks which (physical-game agency), not the engine. Read AFTER the
     // borrow choosers so declined missions' penalties are included.
+    // DUPLICATES — read LIVE (not precaptured): a borrow-completed Mirror
+    // Gate sets the flag inside the borrow chooser above.
+    const afterDuplicate = () => {
+        if (mpActive()) return Promise.resolve();   // handled in the stage loop
+        return game.players[0]._pendingDuplicatePick
+            ? showDuplicatePicker() : Promise.resolve();
+    };
     const afterPenalty = () => {
         if (mpActive()) return Promise.resolve();   // handled in the stage loop
         const penaltyPending = game.players[0]._pendingPenaltyDiscard || 0;
@@ -5828,7 +5870,7 @@ async function endActPhases() {
     showMissionCeremony(missionResults, actNum)
         .then(() => showMissionDrawBeat())
         .then(() => renderGameState())
-        .then(afterBorrows).then(afterPenalty).then(afterPromise)
+        .then(afterBorrows).then(afterDuplicate).then(afterPenalty).then(afterPromise)
         // A mission FAILED by declining its borrow (Let it Fail) records its
         // draws HERE, after the first beat already ran — surface them now so a
         // Midnight-Crash Act-3 mission is never handed out in silence (Wyatt 7/17).
@@ -5854,8 +5896,14 @@ function showBorrowChooser(card) {
         const p0 = game.players[0];
         const curSlot = p0.character && p0.character.slots ? p0.character.slots[p0.sliderPosition] : null;
         const anyLender = curSlot && curSlot.special === 'borrow_any_player';
+        // A fielded Trade Route (Great North Connection / Market Trade
+        // Exchange) opens the WHOLE table for its four skills — the engine
+        // already lends across; the chooser used to hide every seat that
+        // wasn't a neighbor (Wyatt 7/23, the Mirror Gate borrow).
+        const tradeRoute = (p0.playedCards || []).some(c => c.special === 'trade_route');
         const leftPi = (n - 1) % n, rightPi = 1 % n;
-        const seats = anyLender
+        const wide = anyLender || tradeRoute;
+        const seats = wide
             ? [...Array(n).keys()].filter(i => i !== 0)
             : [...new Set([leftPi, rightPi])];
 
@@ -5870,7 +5918,7 @@ function showBorrowChooser(card) {
         const totalCost = missingSkills.length * 2;
 
         const seatTag = pi => {
-            if (anyLender) return '';
+            if (wide) return '';
             if (pi === leftPi) return '<span class="bw-tag">◀ Left Neighbor</span>';
             if (pi === rightPi) return '<span class="bw-tag">Right Neighbor ▶</span>';
             return '';
@@ -5918,7 +5966,7 @@ function showBorrowChooser(card) {
                     <div class="pp-title">Borrow &amp; Play</div>
                     <div class="pp-sub"><b>${card.name}</b> needs <b>${needTxt}</b> —
                         ${single ? 'tap the neighbor who lends it' : 'pick a lender for each skill'}.
-                        The fee is paid <b>to them</b>${anyLender ? ' · your Merchant slot lets anyone lend' : ''}.</div>
+                        The fee is paid <b>to them</b>${anyLender ? ' · your Merchant slot lets anyone lend' : tradeRoute ? ' · your Trade Route lets anyone lend' : ''}.</div>
                     <div class="bw-scroll">${sectionHtml}</div>
                     <div class="pp-actions">
                         ${single ? '' : `<button class="btn-royal primary" id="bwConfirm" ${ready ? '' : 'disabled style="opacity:.35"'}><span>Borrow &amp; Play (−${totalCost}g)</span></button>`}
@@ -6169,8 +6217,13 @@ function showMissionBorrowChooser(mission) {
         const p0 = game.players[0];
         const curSlot = p0.character && p0.character.slots ? p0.character.slots[p0.sliderPosition] : null;
         const anyLender = curSlot && curSlot.special === 'borrow_any_player';
+        // Trade Route on the field opens the whole table for its four
+        // skills — the engine already planned across it; the chooser used
+        // to render only the neighbors (Wyatt 7/23, the Mirror Gate).
+        const tradeRoute = (p0.playedCards || []).some(c => c.special === 'trade_route');
         const leftPi = (n - 1) % n, rightPi = 1 % n;
-        const seats = anyLender
+        const wide = anyLender || tradeRoute;
+        const seats = wide
             ? [...Array(n).keys()].filter(i => i !== 0)
             : [...new Set([leftPi, rightPi])];
 
@@ -6186,7 +6239,7 @@ function showMissionBorrowChooser(mission) {
             .map(([sk, u]) => `${cap(sk)}${u > 1 ? ' ×' + u : ''}`).join(', ');
 
         const seatTag = (pi) => {
-            if (anyLender) return '';
+            if (wide) return '';
             if (pi === leftPi) return '<span class="bw-tag">◀ Left Neighbor</span>';
             if (pi === rightPi) return '<span class="bw-tag">Right Neighbor ▶</span>';
             return '';
@@ -6197,9 +6250,16 @@ function showMissionBorrowChooser(mission) {
             const idx = game.players[0].missions.indexOf(mission);
             // Stream the LENDERS too, not just yes/no — a peer that re-picked
             // the first neighbor itself would pay a different purse and fork.
+            // Lenders stream as CANONICAL seats — every client's local
+            // numbering differs, and a raw index pays a different purse on a
+            // rotated table (the card Borrow & Play path always translated;
+            // this path forgot).
             mpPub('mission_borrow', {
                 accept: !!chosen, missionName: mission.name,
-                borrowFrom: chosen || null,
+                borrowFrom: chosen
+                    ? chosen.map(b => ({ skill: b.skill,
+                        lender: (window.FMP && FMP.active()) ? FMP.canonSeat(b.neighborIndex) : b.neighborIndex }))
+                    : null,
             });
             if (!chosen) {
                 addLogEntry(`You let ${mission.name} fail`);
@@ -6261,7 +6321,7 @@ function showMissionBorrowChooser(mission) {
                         <div class="mb-choose">
                             <div class="pp-sub">You're short <b>${shortTxt}</b> —
                                 ${single ? 'tap the neighbor who lends it' : 'pick a lender for each skill'}.
-                                The fee is paid <b>to them</b>${anyLender ? ' · your Merchant slot lets anyone lend' : ''}.
+                                The fee is paid <b>to them</b>${anyLender ? ' · your Merchant slot lets anyone lend' : tradeRoute ? ' · your Trade Route lets anyone lend' : ''}.
                                 Letting it fail is a real play.</div>
                             <div class="bw-scroll">${sectionHtml}</div>
                             <div class="pp-actions">
@@ -6488,6 +6548,66 @@ async function drainWeaponDiscards() {
 // ═══ A PROMISE — choose any number of played cards to sacrifice ═══════
 // Faithful to the card: "Discard at least 1 Card, gain 8 Prestige for
 // each discarded Card." The player taps cards to mark them, then confirms.
+// ═══ DUPLICATE PICKER — Passing the Mirror Gate / Wild Experiments:
+// "Choose one Artifact/Potion you own" — the CHOICE is the player's
+// (Wyatt 7/23: the engine used to pick for you). Publishes in MP so every
+// client applies the same copy through game.applyDuplicatePick.
+function showDuplicatePicker() {
+    return new Promise((resolve) => {
+        const ov = document.getElementById('promisePicker');
+        const fam = game.players[0]._pendingDuplicatePick;
+        const pool = fam ? game.players[0].playedCards.filter(c => c.type === fam) : [];
+        if (!ov || !pool.length) {
+            game.players[0]._pendingDuplicatePick = null;
+            mpPub('dup_pick', { cardId: null });
+            resolve();
+            return;
+        }
+        // dataset values are STRINGS and card ids are numbers — keep the
+        // selection as a string key and hand the TYPED id to the engine,
+        // or the strict compare silently falls back to the AI's pick.
+        let chosen = pool.length === 1 ? String(pool[0].id) : null;
+        const byKey = () => pool.find(c => String(c.id) === chosen);
+        const famName = fam === 'artifact' ? 'Artifact' : 'Potion';
+        const render = () => {
+            const cards = pool.map(c => `
+                <div class="pp-card${String(c.id) === chosen ? ' chosen' : ''}" data-cid="${c.id}">
+                    <img src="assets/cards/regular/${c.filename}" alt="${c.name}">
+                </div>`).join('');
+            ov.innerHTML = `
+                <div class="pp-inner">
+                    <div class="pp-title">Duplicate ${fam === 'artifact' ? 'an Artifact' : 'a Potion'}</div>
+                    <div class="pp-sub">The mission duplicates <b>one ${famName} you own</b> for the rest of the game${fam === 'potion' ? ' — and it fires again now' : ''}. Choose which.</div>
+                    <div class="pp-cards">${cards}</div>
+                    <div class="pp-actions">
+                        <button class="btn-royal primary" id="dupConfirm" ${chosen ? '' : 'disabled style="opacity:.35"'}>
+                            <span>${chosen ? `Duplicate ${(byKey() || {}).name}` : `Choose a ${famName}`}</span>
+                        </button>
+                    </div>
+                </div>`;
+            ov.querySelectorAll('.pp-card').forEach(el => {
+                el.onclick = () => { chosen = el.dataset.cid; render(); };
+            });
+            ov.querySelector('#dupConfirm').onclick = () => {
+                const pick = byKey();
+                if (!pick) return;
+                // Card ids match on every client — the TYPED id streams.
+                mpPub('dup_pick', { cardId: pick.id });
+                const res = game.applyDuplicatePick(0, pick.id);
+                ov.classList.remove('active');
+                if (res && res.success) {
+                    showNotification(`${res.source.name} duplicated!`, 'mission');
+                    addLogEntry(`You duplicate ${res.source.name}`);
+                }
+                renderGameState();
+                resolve();
+            };
+        };
+        render();
+        ov.classList.add('active');
+    });
+}
+
 function showPromiseDiscardPicker() {
     return new Promise((resolve) => {
         const ov = document.getElementById('promisePicker');
@@ -6634,6 +6754,50 @@ function showChemXPicker() {
 // whichever skill you had least of, and the grant didn't even survive the next
 // skill recalc. Publishes 'slot_pick' so a multiplayer table applies YOUR pick,
 // in stream order, on every client. Resolves when the grant has landed.
+// The Merchant's counting house (Wyatt 7/23): landing OFFERS the 1:1
+// Gold→Prestige trade — "the key word is may". The local human sees this
+// prompt; the choice publishes a 'slot_convert' move so every table applies the
+// same engine call in stream order (MPV 21). game.applyGoldConvert is the ONE
+// mutation point; the amount is read live off the purse, not the pause flag.
+function showConvertChoice() {
+    return new Promise((resolve) => {
+        const ov = document.getElementById('promisePicker');
+        const player = game.players[0];
+        const gold = player.gold || 0;
+        if (!ov || gold <= 0) { player._pendingConvert = null; resolve(); return; }
+
+        const decide = (doConvert) => {
+            // Publish BEFORE mutating: peers apply the identical choice through
+            // the same engine call, in stream order (no-op solo).
+            mpPub('slot_convert', { convert: doConvert });
+            const res = game.applyGoldConvert(0, doConvert);
+            if (res.converted) {
+                addLogEntry(`You convert ${res.converted} Gold into ${res.converted} Prestige`);
+                showNotification(`+${res.converted} Prestige from the counting house`, 'play');
+            } else {
+                addLogEntry('You keep your Gold');
+            }
+            ov.classList.remove('active');
+            ov.innerHTML = '';
+            renderGameState();
+            resolve();
+        };
+
+        ov.innerHTML = `
+            <div class="pp-inner">
+                <div class="pp-title">The Merchant's Counting House</div>
+                <div class="pp-sub">Convert your <b>${gold} Gold</b> into <b>${gold} Prestige</b>? You <i>may</i> — or keep your purse for slides and borrows.</div>
+                <div class="pp-actions">
+                    <button class="btn-royal primary" id="convDo"><span>Convert to ${gold} Prestige</span></button>
+                    <button class="btn-royal" id="convKeep"><span>Keep ${gold} Gold</span></button>
+                </div>
+            </div>`;
+        ov.querySelector('#convDo').onclick = () => decide(true);
+        ov.querySelector('#convKeep').onclick = () => decide(false);
+        ov.classList.add('active');
+    });
+}
+
 function showSlotSkillPicker() {
     return new Promise((resolve) => {
         const ov = document.getElementById('promisePicker');
@@ -6810,7 +6974,12 @@ function showScoring() {
     });
     const myHeroId = game.players[0] && game.players[0].character
         ? game.players[0].character.id : null;
+    // The decision transcript flushes here — host-only in MP, this client
+    // otherwise; fire-and-forget, the ceremony never waits on the wire
+    // (telemetry, Hard-AI Phase 1).
+    if (window.FTEL) { try { FTEL.flush(scores, { humans: humansAtTable }); } catch (e) { /* never */ } }
     clearSoloSave();   // the table finished — nothing left to resume
+    if (window.FALM) FALM.commitGame();  // finished games alone unlock almanac entries
     if (window.FLB) {
         // The resolved XP (computed INSIDE the posting transaction) paints
         // the victory chip late and raises the Level 5 ceremony — never a
@@ -6856,6 +7025,41 @@ function showScoring() {
     const personal = youWon
         ? 'The realm bows before its new sovereign.'
         : `You finished ${VS_ORDINAL[place] || (place + 1) + 'th'}.`;
+
+    // ── WHY the standings broke this way ─────────────────────────────
+    // A tie on Total is settled by GOLD (calculateFinalScores' sort), and
+    // the sheet said none of that: two identical 73s, one trophy, no reason
+    // given (Wyatt 7/23, the table's first-ever tie — "I'm a little confused
+    // why I got second… we need to verbally show who the tiebreaker is").
+    // Gold isn't a scoring category, so the one number that decided the game
+    // was the one number NOT on the sheet. Say it in words here, and drop
+    // the coins into the grid under the total so the claim is checkable.
+    const tiedWith = (s) => scores.filter(t => t.finalScore === s.finalScore);
+    const anyTie = scores.some((s, i) => i > 0 && s.finalScore === scores[i - 1].finalScore);
+    const seatName = (s) => (s.playerIndex === 0 ? 'You' : s.name);
+    let tiebreak = '';
+    if (place >= 0 && tiedWith(scores[place]).length > 1) {
+        const ring = tiedWith(scores[place]);
+        const rivals = ring.filter(s => s !== scores[place]).map(seatName);
+        const withWhom = rivals.length > 1
+            ? rivals.slice(0, -1).join(', ') + ' and ' + rivals[rivals.length - 1]
+            : rivals[0];
+        const golds = ring.map(s => `${seatName(s)} ${s.gold}`).join(', ');
+        // The seat that actually decided YOUR place: the one directly above
+        // you in the ring, or — if you took the ring — the one just below.
+        // Comparing against the ring LEADER instead would claim gold settled
+        // a three-way tie whose top two were themselves level on it.
+        const k = ring.indexOf(scores[place]);
+        const decider = k > 0 ? ring[k - 1] : ring[1];
+        // Level on Gold as well? Then the sort's seat order settles it — a
+        // reason no player can act on. Never dress that up as a rule: call
+        // the dead heat what it is.
+        const settled = decider.gold !== ring[k].gold;
+        tiebreak = `<div class="vs-tiebreak"><img src="${PURSE_ICONS.gold}" alt="">
+            <span><b>Tied at ${scores[place].finalScore} with ${withWhom}</b> — ${settled
+                ? `most Gold breaks the tie: ${golds}.`
+                : `and level on Gold too (${ring[k].gold} each): a true dead heat.`}</span></div>`;
+    }
 
     // Rating + Stars deltas, shown BIG. Rating persists via postGameResult
     // (works offline too — the local adapter keeps the same ledgers);
@@ -6944,11 +7148,21 @@ function showScoring() {
     const totalRi = SHEET_ROWS.length + 1;
     const totalCells = scores.map((s, i) =>
         `<div class="vsg-cell total${s.playerIndex === 0 ? ' me' : ''}${i === 0 ? ' win' : ''}" style="--ri:${totalRi}"><b data-total="${s.finalScore}" data-cd="1150">0</b></div>`).join('');
+    // The tiebreak row sits BELOW the total: it is not part of anyone's
+    // score, it is the reason two equal totals ordered the way they did.
+    // Drawn only when a tie actually needs explaining — a Gold row on every
+    // sheet would read as a scoring category, which it is not.
+    const tieRi = totalRi + 1;
+    const tieRow = anyTie
+        ? `<div class="vsg-label tiebreak" style="--rowC:#b08d3c;--ri:${tieRi}"><img src="${PURSE_ICONS.gold}" alt=""><span>Gold · tiebreak</span></div>`
+          + scores.map(s => `<div class="vsg-cell tiebreak${tiedWith(s).length > 1 ? ' live' : ''}${s.playerIndex === 0 ? ' me' : ''}" style="--rowC:#b08d3c;--ri:${tieRi}">${s.gold}</div>`).join('')
+        : '';
     const grid = `
         <div class="vs-grid" style="--vsgCols:${scores.length}">
             <div class="vsg-corner" style="--ri:0"></div>${heads}
             ${bodyRows}
             <div class="vsg-label total" style="--rowC:#efe6cf;--ri:${totalRi}"><img src="${PURSE_ICONS.favor}" alt=""><span>Total</span></div>${totalCells}
+            ${tieRow}
         </div>`;
 
     content.innerHTML = `
@@ -6957,6 +7171,7 @@ function showScoring() {
             ${youWon ? '<div class="champ-rays"></div>' : ''}
             <div class="vs-headline">${headline}</div>
             <div class="vs-personal">${personal}</div>
+            ${tiebreak}
         </div>
         ${deltas ? `<div class="vs-deltas">${deltas}</div>` : ''}
         <div class="scoring-scroll">${grid}</div>
@@ -7122,6 +7337,12 @@ function showScoreBreakdown(pi, cat) {
                 label: e.label, val: e.amount });
             total += e.amount;
         });
+        // The map pair pays 20 PRESTIGE (Wyatt 7/23) — it rides the Prestige
+        // row, but the story belongs here with the maps, so the panel says
+        // so without adding a favor row that would break the sum.
+        if (cat === 'artifact' && gp.mapBonusAwarded) {
+            notes.push('Both Map halves found — +20 Prestige (counted in the Prestige row).');
+        }
         if (!items.length) {
             notes.push(cat === 'adventure' ? 'No Adventure cards played.'
                 : 'No Artifacts played.');
@@ -7729,9 +7950,20 @@ function showMissionCeremony(missionResults, actNum) {
         // ── A conditional reward that MISSED ─────────────────────────────
         // Recording only the payout meant a gate that failed said nothing at
         // all. Asserting the counterfactual is the whole point of the beat.
+        //
+        // ⚠ A MISSED GATE IS NOT A FINE (Wyatt 7/23: "if you fail Labyrinth
+        // and you don't have the Fortune Teller you are fined 50 Prestige —
+        // it needs to NOT fine you"). The engine has always been right: the
+        // Fortune Teller PAYS +50 when you hold her and does exactly nothing
+        // when you don't. The lie was this chip — red, `bad`, and worded
+        // "50 Prestige lost", which on screen is indistinguishable from a
+        // 50-point penalty. Nobody is ever docked for a card they never had.
+        // Keep the counterfactual (it's what makes a nothing-happened beat
+        // worth watching) but phrase it as the bonus that didn't come, in a
+        // neutral chip.
         const gateChips = (b) => (((b.r.deltas || {}).gates) || [])
             .filter(g => !g.met)
-            .map(g => chip(g.unit, `No ${g.card} — ${g.value} ${cap(g.unit)} lost`, 'bad'))
+            .map(g => chip(g.unit, `No ${g.card} — would have paid +${g.value} ${cap(g.unit)}`, 'flat'))
             .join('');
 
         // Honest payout chips from the engine's measured deltas — plus the
@@ -7776,6 +8008,14 @@ function showMissionCeremony(missionResults, actNum) {
                     chips.push(chip(sk, `+${n} ${cap(sk)}`, 'good')));
             }
             if (b.r.success && m.grantsMap) chips.push(chip('maps', `${m.grantsMap} Map`, 'good'));
+            // Duplicate specials move no MEASURED resource, but a copied card is a
+            // real reward (and a potion copy fires its effect again). Without this
+            // the beat read "Completed — no further reward" over a mission whose
+            // card literally says "duplicate the chosen card" (Wyatt/Skylar 7/23).
+            if (b.r.success && m.successSpecial === 'duplicate_artifact')
+                chips.push(chip('mission', 'Artifact duplicated', 'good'));
+            if (b.r.success && m.successSpecial === 'duplicate_potion')
+                chips.push(chip('mission', 'Potion duplicated — it fires again', 'good'));
             if (b.r.borrowed) chips.push(chip('gold', `Borrowed help −${b.r.borrowed}g`, 'bad'));
             if (goldGain < 0) chips.push(chip('gold', `−${-goldGain} Gold`, 'bad'));
             if (d.favor < 0) chips.push(chip('favor', `−${-d.favor} Favor`, 'bad'));
@@ -7802,15 +8042,24 @@ function showMissionCeremony(missionResults, actNum) {
             const took = discardStrip(b);
             const others = othersRow(b);
             let fallback = '';
-            if (!chips && !gates && !took && !others) {
+            if (!chips && !took && !others) {
                 const worth = b.r.mission.favorValue || 0;
                 fallback = b.r.success
                     ? `<span class="mc-chip flat">Completed — no further reward</span>`
-                    : (worth > 0
-                        ? chip('favor', `${worth} Favor forfeit`, 'bad big')
-                        : `<span class="mc-chip flat">Failed — no penalty, the mission is simply lost</span>`);
+                    // A failure whose whole story is a conditional that didn't
+                    // fire cost nothing at all — say that OUT LOUD. A lone
+                    // "would have paid +50" chip still reads like a bill if
+                    // nothing on screen says the bill was never sent, and the
+                    // Favor-forfeit line would just be the fine wearing a
+                    // different hat. (The gate case is The Labyrinth's; every
+                    // real penalty lands in `chips` and skips this branch.)
+                    : (gates
+                        ? `<span class="mc-chip flat">No penalty — the mission is simply lost</span>`
+                        : (worth > 0
+                            ? chip('favor', `${worth} Favor forfeit`, 'bad big')
+                            : `<span class="mc-chip flat">Failed — no penalty, the mission is simply lost</span>`));
             }
-            return reqLine(b) + chips + gates + fallback + took + others;
+            return reqLine(b) + chips + fallback + gates + took + others;
         };
 
         const renderBeat = (b) => {
@@ -7991,8 +8240,10 @@ function showMeleeSplash(results, actNum) {
         speed: window.CINEMATIC_SPEED || 1,
         // Auto-play the whole melee at a calm, thematic pace — never wait on a
         // tap at each fighter (Wyatt 7/17). Continue still lets you skip ahead.
+        // EXCEPT in the How-to-Play tutorial, which owns pacing: there the
+        // result must WAIT for a tap so the Melee can be narrated, not vanish.
         forgeHoldMs: 3600,
-        autoCloseMs: 5200,
+        autoCloseMs: window.TUT_ACTIVE ? 0 : 5200,
         powerIcon: 'assets/icons/power.png',
         portraitFor: (pi) => {
             const p = (pi != null && game.players[pi]) ? game.players[pi] : null;

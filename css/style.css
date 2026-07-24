@@ -3448,6 +3448,27 @@ body:has(#game-screen.active) .music-toggle { left: auto; right: 240px; }
     margin-top: 7px;
 }
 
+/* The tie explainer — only ever drawn when a tie decided your placement.
+   Gold-lit so it reads as the reason for the standing, not as flavor. */
+.vs-tiebreak {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 10px;
+    padding: 7px 15px;
+    max-width: 100%;
+    border: 1px solid rgba(201, 168, 76, 0.5);
+    border-radius: 11px;
+    background: linear-gradient(180deg, rgba(60, 40, 14, 0.5), rgba(30, 18, 7, 0.6));
+    font-family: 'EB Garamond', serif;
+    font-size: clamp(13px, 1.9vw, 16px);
+    color: var(--parchment-dark);
+    text-align: left;
+}
+.vs-tiebreak img { width: 22px; height: 22px; flex: 0 0 22px; object-fit: contain; }
+.vs-tiebreak b { color: var(--gold-light); font-weight: 700; }
+
 .vs-deltas {
     display: flex;
     gap: 14px;
@@ -3545,6 +3566,15 @@ body:has(#game-screen.active) .music-toggle { left: auto; right: 240px; }
     font-size: 20px; color: #fff;
 }
 .vsg-cell.total.win { color: #f4dd8f; }
+/* Gold · tiebreak — under the total, dimmed, because it is the reason for
+   the order and never part of the score. The seats a tie actually caught
+   light up; everyone else's coins stay quiet reference. */
+.vsg-label.tiebreak { font-size: 9.5px; letter-spacing: 1.2px; }
+.vsg-cell.tiebreak { font-size: 14px; color: #cdbf9f; opacity: 0.62; }
+.vsg-cell.tiebreak.live {
+    opacity: 1; color: #ffd97a;
+    box-shadow: inset 0 0 0 1px rgba(232, 195, 75, 0.45);
+}
 @keyframes vsgIn {
     from { opacity: 0; transform: translateY(9px); }
     to { opacity: 1; transform: none; }
@@ -4935,12 +4965,27 @@ body:has(#game-screen.active) .log-toggle { display: flex; right: 294px; }
         gap: 10px;
         z-index: 2;
         --tvStackCardH: clamp(64px, 24dvh, 96px);
+        /* Many piles must never slide under the board thumb — the strip
+           scrolls instead (Wyatt 7/23: every pile observable, tappable). */
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .tv-stage::-webkit-scrollbar { display: none; }
+    /* 5+ families: thinner cards, left-anchored so the scroll start is
+       always reachable (a centered overflow clips its own head). */
+    .tv-stage.dense {
+        --tvStackCardH: clamp(56px, 19dvh, 80px);
+        justify-content: flex-start;
+        gap: 8px;
     }
     .tv-stack {
         display: flex;
         flex-direction: column;
         align-items: center;
         position: relative;
+        flex: none;
     }
     .tv-stack-card {
         width: calc(var(--tvStackCardH) * 0.666);
@@ -5593,6 +5638,10 @@ body:has(#game-screen.active) .log-toggle { display: flex; right: 294px; }
     .vs-head { padding: 10px 20px 6px; }
     .vs-headline { font-size: clamp(19px, 4.6vh, 24px); }
     .vs-personal { font-size: 12px; margin-top: 3px; }
+    /* The note costs head height on the 844×390 budget, so it pays rent:
+       small, tight, one line — it still reads before any scroll. */
+    .vs-tiebreak { font-size: 11px; padding: 3px 9px; gap: 5px; margin-top: 4px; border-radius: 8px; }
+    .vs-tiebreak img { width: 15px; height: 15px; flex-basis: 15px; }
     .vs-deltas { gap: 8px; margin: 6px 0 2px; }
     .vs-delta { font-size: 13px; padding: 5px 12px; gap: 6px; }
     .vs-places { gap: 3px; margin-top: 8px; }
@@ -7850,4 +7899,260 @@ body:has(#howto-overlay.open) .throw-hint {
     box-shadow: 0 0 0 2px rgba(140,225,125,0.95), 0 0 18px 4px rgba(120,220,120,0.55);
     animation: playableBreathe 2.2s ease-in-out infinite;
     border-radius: 8px;
+}
+
+/* ═══ ALMANAC — lifetime collection book (js/almanac.js) ═══
+   Sits UNDER .card-zoom (2000) so tapping a discovered card zooms it with
+   the existing lightbox; opens from the title screen only, where nothing
+   else stacks this high. */
+.alm-gallery {
+    position: fixed; inset: 0; z-index: 1980; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(8, 5, 2, 0.82);
+}
+.alm-gallery.open { display: flex; }
+.alm-inner {
+    position: relative;
+    width: min(1080px, 96vw); max-height: min(90vh, calc(100dvh - 14px));
+    display: flex; flex-direction: column;
+    background: linear-gradient(#241b0f, #14100a);
+    border: 2px solid #8a6a1f; border-radius: 10px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.7);
+}
+.alm-head {
+    position: relative; padding: 16px 22px 10px;
+    border-bottom: 1px solid #3a2d17;
+}
+.alm-title { font-family: 'Cinzel', serif; font-size: 22px; color: #f0dfb8; }
+.alm-sub { font-size: 12.5px; color: #a8926a; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.alm-x {
+    position: absolute; top: 14px; right: 14px;
+    background: none; border: none; color: #a8926a; font-size: 18px; cursor: pointer;
+}
+.alm-x:hover, .alm-x:focus-visible { color: #f0dfb8; outline: none; }
+.alm-tabs {
+    display: flex; flex-wrap: nowrap; gap: 6px;
+    padding: 10px 16px; border-bottom: 1px solid #3a2d17;
+}
+/* One equal-width tab per category, filling the whole row (Wyatt 7/23).
+   Medallion + text: acts wear their numeral, missions the scroll icon,
+   each type a wax seal in its FRAME color — the same blue-means-endeavor
+   language the cards themselves teach. `--seal` carries the type color;
+   an MJ art pass can swap any seal for an image via the tab's `icon`. */
+.alm-tab {
+    flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: #1c150c; border: 1px solid #4a3a1c; border-radius: 8px;
+    padding: 7px 4px 5px; cursor: pointer;
+}
+.alm-tab-art {
+    width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #6a5220; background: radial-gradient(#332712, #1a1309);
+    box-shadow: inset 0 0 8px rgba(0,0,0,.7), 0 2px 6px rgba(0,0,0,.5);
+    flex: 0 0 auto;
+}
+.alm-tab-art img.icon { width: 62%; height: 62%; object-fit: contain; }
+.alm-tab-art.numeral {
+    font-family: 'Cinzel', serif; font-size: 17px; font-weight: 700;
+    color: #b39a6a; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+.alm-tab-art.seal {
+    background: var(--seal);   /* stands alone if color-mix is unsupported */
+    background:
+        radial-gradient(circle at 32% 28%, rgba(255,255,255,.38), rgba(255,255,255,0) 42%),
+        radial-gradient(circle at 50% 60%, var(--seal), color-mix(in srgb, var(--seal) 55%, #000));
+    filter: saturate(.8) brightness(.9);
+}
+.alm-tab-lbl {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11px; color: #c3ae86; letter-spacing: .02em;
+}
+.alm-tab .alm-tab-n { font-size: 9.5px; color: #8a7550; font-variant-numeric: tabular-nums; }
+.alm-tab:hover { border-color: #8a6a1f; }
+.alm-tab:hover .alm-tab-art { border-color: #c9a542; }
+.alm-tab:hover .alm-tab-lbl { color: #f0dfb8; }
+.alm-tab.cur {
+    background: linear-gradient(#3a2c14, #2a1f0e); border-color: #c9a542;
+}
+.alm-tab.cur .alm-tab-art {
+    border-color: #f0d78a;
+    box-shadow: inset 0 0 8px rgba(0,0,0,.5), 0 0 10px rgba(201,165,66,.55);
+}
+.alm-tab.cur .alm-tab-art.seal { filter: none; }
+.alm-tab.cur .alm-tab-art.numeral { color: #f0dfb8; }
+.alm-tab.cur .alm-tab-lbl { color: #f4e6c8; }
+.alm-tab.cur .alm-tab-n { color: #c9a542; }
+/* Flex-wrap, NOT css grid — same pre-fontload row-track trap the
+   achievements grid hit (Overlap.jpg, 7/20). */
+.alm-grid {
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    padding: 14px 14px 26px; overflow-y: auto;
+}
+.alm-inner::after {
+    content: ''; position: absolute; left: 3px; right: 3px; bottom: 3px;
+    height: 24px; border-radius: 0 0 8px 8px; pointer-events: none;
+    background: linear-gradient(transparent, rgba(18, 14, 9, 0.92));
+}
+.alm-tile {
+    position: relative; width: 108px; flex: 0 0 auto;
+    border-radius: 7px;
+}
+.alm-tile img {
+    display: block; width: 100%; border-radius: 7px;
+    aspect-ratio: 5 / 7; object-fit: cover;
+    box-shadow: 0 3px 10px rgba(0,0,0,.55);
+}
+.alm-tile.got { cursor: zoom-in; transition: transform .12s ease; }
+.alm-tile.got:hover { transform: translateY(-3px) scale(1.03); }
+.alm-tile.locked img { filter: grayscale(.85) brightness(.5); }
+.alm-seal {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center;
+    font-family: 'Cinzel', serif; font-size: 30px; color: #8a7550;
+    text-shadow: 0 2px 6px rgba(0,0,0,.8); pointer-events: none;
+}
+.alm-count {
+    position: absolute; top: 5px; right: 5px;
+    background: rgba(20, 14, 6, 0.9); border: 1px solid #c9a542;
+    border-radius: 10px; padding: 1px 7px;
+    font-size: 11px; font-weight: 700; color: #f0dfb8;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Phone landscape: shorter panel, smaller tiles, tighter chrome. */
+@media (orientation: landscape) and (max-height: 540px) {
+    .alm-inner { max-height: calc(100dvh - 10px); width: 96vw; }
+    .alm-head { padding: 9px 16px 6px; }
+    .alm-title { font-size: 16px; }
+    .alm-sub { font-size: 10.5px; }
+    .alm-tabs { padding: 5px 10px; gap: 4px; }
+    .alm-tab { padding: 3px 2px 2px; gap: 2px; }
+    .alm-tab-art { width: 22px; height: 22px; border-width: 1.5px; }
+    .alm-tab-art.numeral { font-size: 12px; }
+    .alm-tab-lbl { font-size: 8.5px; }
+    .alm-tab .alm-tab-n { font-size: 8px; }
+    .alm-grid { gap: 7px; padding: 10px 10px 20px; }
+    .alm-tile { width: 76px; }
+    .alm-seal { font-size: 20px; }
+}
+
+/* ═══ SETTINGS — cog + panel (js/settings.js) ═══
+   z 1970: UNDER the Almanac (1980) so its door stacks the book above the
+   panel, and both stay under .card-zoom (2000). */
+.ts-cog {
+    /* Top-left, tucked right below the music note (fixed 20/20, 44px). */
+    position: absolute; left: 20px; top: 74px; z-index: 6;
+    width: 44px; height: 44px; border-radius: 50%; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(#2e2311, #1a1309);
+    border: 2px solid #8a6a1f; color: #d8bf8a;
+    font-size: 27px; line-height: 1; cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0,0,0,.55);
+    transition: transform .25s ease, color .15s ease, border-color .15s ease;
+}
+/* The ⚙ glyph carries baseline lean in most fonts — nudge to optical center. */
+.ts-cog span { display: block; transform: translateY(-1px); }
+.ts-cog:hover, .ts-cog:focus-visible {
+    color: #f4e6c8; border-color: #c9a542; outline: none;
+    transform: rotate(45deg);
+}
+.set-overlay {
+    position: fixed; inset: 0; z-index: 1970; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(8, 5, 2, 0.82);
+}
+.set-overlay.open { display: flex; }
+.set-inner {
+    width: min(540px, 94vw); max-height: min(88vh, calc(100dvh - 14px));
+    display: flex; flex-direction: column;
+    background: linear-gradient(#241b0f, #14100a);
+    border: 2px solid #8a6a1f; border-radius: 10px;
+    box-shadow: 0 24px 70px rgba(0,0,0,.7);
+}
+.set-head {
+    position: relative; padding: 16px 22px 12px;
+    border-bottom: 1px solid #3a2d17;
+}
+.set-title { font-family: 'Cinzel', serif; font-size: 22px; color: #f0dfb8; }
+.set-x {
+    position: absolute; top: 14px; right: 14px;
+    background: none; border: none; color: #a8926a; font-size: 18px; cursor: pointer;
+}
+.set-x:hover, .set-x:focus-visible { color: #f0dfb8; outline: none; }
+.set-body { padding: 6px 22px 20px; overflow-y: auto; }
+.set-sec { margin-top: 14px; }
+.set-sec-title {
+    font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+    color: #b39a6a; margin-bottom: 8px;
+    border-bottom: 1px solid #2c2212; padding-bottom: 4px;
+}
+.vol-row {
+    display: grid; grid-template-columns: 20px 72px 1fr 44px;
+    align-items: center; gap: 10px; padding: 5px 0;
+}
+.vol-row input[type="range"] { width: 100%; accent-color: #c9a542; }
+.vol-row input[type="checkbox"], .set-check input[type="checkbox"] { accent-color: #c9a542; }
+.vol-lbl { font-size: 13px; color: #c3ae86; }
+.vol-pct {
+    font-size: 11.5px; color: #8a7550; text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.vol-row.off .vol-lbl, .vol-row.off .vol-pct { opacity: .45; }
+.vol-row.off input[type="range"] { opacity: .35; }
+.set-row { padding: 5px 0; }
+.set-check {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13px; color: #c3ae86; cursor: pointer;
+}
+.set-check:hover { color: #f0dfb8; }
+.set-warn {
+    margin: 3px 0 0 29px; font-size: 11px; line-height: 1.35;
+    color: #d9534f;
+}
+.set-build {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 4px 0;
+    font-size: 12px; color: #8a7550; font-variant-numeric: tabular-nums;
+}
+.set-upd-btn {
+    background: #1c150c; border: 1px solid #4a3a1c; border-radius: 6px;
+    color: #c3ae86; font-size: 12px; padding: 6px 12px; cursor: pointer;
+}
+.set-upd-btn:hover { border-color: #c9a542; color: #f0dfb8; }
+
+/* Almanac door on the profile's Standing row: the book beside the purse.
+   While the profile (z 10005) is up, the book + its card zoom must stack
+   ABOVE it — scoped with :has so global overlay order stays untouched. */
+.pf-alm-btn { background: none; border: none; padding: 0; cursor: pointer; flex: 0 0 auto; }
+.pf-alm-btn img {
+    width: 48px; display: block;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.55));
+    transition: transform .15s ease;
+}
+.pf-alm-btn:hover img, .pf-alm-btn:focus-visible img { transform: scale(1.12) rotate(-3deg); }
+body:has(.profile-panel.active) .alm-gallery { z-index: 10600; }
+body:has(.profile-panel.active) .card-zoom { z-index: 10610; }
+
+/* Settings kill-switch for the playable glow — GREEN only (Wyatt 7/23).
+   The orange freeplay glow survives the toggle: free is a certainty the
+   turn can't take away, so its signal never misleads. (.freeplay REPLACES
+   .playable in the hand renderers, so this selector can't touch it.) */
+body.no-play-glow .hand-card.playable {
+    box-shadow: none !important;
+    animation: none !important;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+    /* Phones: top-left covers the FAVOR title (Wyatt 7/23) — the cog
+       goes bottom-right instead, above the edition plate. */
+    .ts-cog { left: auto; top: auto; right: 10px; bottom: 28px; width: 36px; height: 36px; font-size: 22px; }
+    .set-inner { max-height: calc(100dvh - 10px); }
+    .set-head { padding: 9px 16px 7px; }
+    .set-title { font-size: 16px; }
+    .set-body { padding: 2px 16px 14px; }
+    .set-sec { margin-top: 9px; }
+    .vol-row { padding: 3px 0; }
+    .set-check, .vol-lbl { font-size: 11.5px; }
+    .set-warn { font-size: 10px; }
 }

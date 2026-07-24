@@ -481,7 +481,7 @@ class FavorGame {
                     const have = this.getMindsEyeCount(playerIndex);
                     for (let i = 0; i < needed - have; i++) missingSpecial.push("Mind's Eye");
                 } else if (req === 'philosopher_stone') {
-                    const have = player.philosopherStone || 0;
+                    const have = this.getStoneCount(playerIndex);
                     for (let i = 0; i < needed - have; i++) missingSpecial.push("Philosopher's Stone");
                 } else {
                     skillReqs[req] = needed;
@@ -549,6 +549,26 @@ class FavorGame {
     /**
      * Count Mind's Eye sources a player holds (played cards + character slot specials).
      */
+    /**
+     * Philosopher's Stones as the RULES see them: permanent tokens (stone
+     * cards, mission rewards, the Magician's board pick) PLUS the current
+     * slot's offer — POSITIONAL, exactly like getMindsEyeCount's slot eyes.
+     * Slide off the slot and its stone stays behind (Wyatt 7/23: parking on
+     * slot 0 must not bank the stone for good — the old once-per-game grant
+     * did, and the panel showed 2 where the table held 1).
+     */
+    getStoneCount(playerIndex) {
+        const player = this.players[playerIndex];
+        let count = player.philosopherStone || 0;
+        const char = player.character;
+        const slot = char && char.slots ? char.slots[player.sliderPosition] : null;
+        if (slot && slot.special) {
+            if (slot.special === 'philosopher_stone' || slot.special === 'minds_eye_and_philosopher') count += 1;
+            if (slot.special === 'philosopher_stone_x2') count += 2;
+        }
+        return count;
+    }
+
     getMindsEyeCount(playerIndex) {
         const player = this.players[playerIndex];
         let count = 0;
@@ -748,6 +768,8 @@ class FavorGame {
 
             // Play the card
             player.playedCards.push(card);
+            // Almanac: local seat 0 only; tools pages load no FALM.
+            if (playerIndex === 0 && window.FALM) window.FALM.recordCard(card);
             this.applyCardEffects(playerIndex, card);
             this.removePendingCard(playerIndex, cardId);
 
@@ -967,6 +989,12 @@ class FavorGame {
      * Favor first, then its purse and skills. Pure: reads state, mutates nothing.
      */
     aiFreeSliderPos(playerIndex) {
+        // Hard seats land Chemical X by the same slot evaluator the paid
+        // planner uses (js/ai.js) — casual keeps the old weights.
+        if (window.FAI && window.FAI.isHard(this, playerIndex)) {
+            const pos = window.FAI.freeSliderPos(this, playerIndex);
+            if (Number.isInteger(pos) && pos !== this.players[playerIndex].sliderPosition) return pos;
+        }
         const player = this.players[playerIndex];
         const slots = (player.character && player.character.slots) || [];
         let best = player.sliderPosition;
@@ -1002,6 +1030,11 @@ class FavorGame {
     aiSlotPick(playerIndex, options) {
         const opts = (options && options.length) ? options : this.slotPickOptions(playerIndex);
         if (!opts.length) return null;
+        // Hard seats pick the skill that unlocks the most (js/ai.js).
+        if (window.FAI && window.FAI.isHard(this, playerIndex)) {
+            const pick = window.FAI.slotPick(this, playerIndex, opts);
+            if (pick && opts.includes(pick)) return pick;
+        }
         const p = this.players[playerIndex];
         let best = opts[0];
         opts.forEach(s => {
@@ -1048,6 +1081,45 @@ class FavorGame {
         this.applySlotSkills(player);
         this.addLog(`${player.name} picks ${chosen} from the board`);
         return { success: true, skill: chosen };
+    }
+
+    /**
+     * Would an AI seat take the Merchant's Gold→Prestige trade? Pure. Prestige
+     * is banked score; Gold is spending power that, unspent, is worth nothing at
+     * the end. So convert only when the purse won't be missed: the endgame, or a
+     * genuinely flush mid-game. Never in Act 1 — slides cost 5g/space and borrows
+     * 2g/unit, so emptying the purse early is a real handicap. (Veto-able default.)
+     */
+    aiWouldConvert(player) {
+        // Hard seats judge the trade in expected points (js/ai.js); the
+        // casual heuristic below is byte-identical to before.
+        if (window.FAI && window.FAI.isHard(this, player.index)) {
+            return window.FAI.wouldConvert(this, player.index);
+        }
+        if (this.currentAct >= 3) return true;
+        if (this.currentAct === 2 && (player.gold || 0) >= 10) return true;
+        return false;
+    }
+
+    /**
+     * Merchant counting house: turn ALL held Gold into an equal pile of Prestige
+     * — or keep it. THE single mutation point (the local prompt, a remote seat's
+     * streamed move, and the AI heuristic all land here), so every client moves
+     * the purse identically in stream order. Clears the pause flag either way.
+     * Re-reads gold at apply time (the stored flag is only the prompt's label).
+     */
+    applyGoldConvert(playerIndex, doConvert) {
+        const player = this.players[playerIndex];
+        player._pendingConvert = null;
+        const gold = player.gold || 0;
+        if (doConvert && gold > 0) {
+            player.prestige += gold;
+            player.gold = 0;
+            this.addLog(`${player.name} converts ${gold} Gold into ${gold} Prestige`);
+            return { success: true, converted: gold };
+        }
+        this.addLog(`${player.name} keeps their Gold`);
+        return { success: true, converted: 0 };
     }
 
     applySlotSkills(player) {
@@ -1245,28 +1317,6 @@ class FavorGame {
     }
 
     /**
-     * Grant N Philosopher's Stones from a character-board slot, once per
-     * game per slot special. Slot events re-fire on every landing (see
-     * applySlotBonus) and the stone tally now STACKS, so without this gate
-     * a player could farm stones by sliding back and forth over the slot.
-     * No board carries the same stone special twice, so keying by special
-     * name is unambiguous. Returns true if the grant paid out.
-     */
-    grantSlotStones(player, key, n) {
-        // ⚠ A PLAIN OBJECT, deliberately, not a Set: a Set does not survive a
-        // JSON round-trip. Nothing serializes players today, but the moment
-        // save/resume or MP sync JSON-encodes them the gate would silently
-        // reset and slot stones would re-grant on every landing -- runaway
-        // inflation, and the sliding-back-and-forth farm this gate exists to
-        // stop. An object survives the trip.
-        if (!player._slotStoneGranted) player._slotStoneGranted = {};
-        if (player._slotStoneGranted[key]) return false;
-        player._slotStoneGranted[key] = true;
-        player.philosopherStone = (player.philosopherStone || 0) + n;
-        return true;
-    }
-
-    /**
      * Resolve one-time special effects from character board slots.
      */
     resolveSlotSpecial(player, special, slot) {
@@ -1313,25 +1363,36 @@ class FavorGame {
                 break;
 
             case 'convert_gold_to_prestige':
+                // "The key word is MAY" (Wyatt 7/23): landing on the Merchant's
+                // counting house OFFERS the 1:1 trade, it doesn't force it.
                 if (player.gold > 0) {
-                    const converted = player.gold;
-                    player.prestige += converted;
-                    player.gold = 0;
-                    this.addLog(`${player.name} converts ${converted} Gold into ${converted} Prestige`);
+                    if (player.index === 0 || player._remoteHuman) {
+                        // A human seat (local OR remote) is ASKED, never auto-
+                        // converted. The flag pauses for a Convert/Keep choice —
+                        // local shows the prompt, a remote seat awaits the owner's
+                        // streamed pick — and applyGoldConvert() is the ONE place
+                        // the purse moves, so every client mutates identically.
+                        player._pendingConvert = player.gold;
+                    } else if (this.aiWouldConvert(player)) {
+                        this.applyGoldConvert(player.index, true);
+                    } else {
+                        this.addLog(`${player.name} keeps their Gold`);
+                    }
                 }
                 break;
 
             case 'philosopher_stone':
-                // Stones STACK (3 stone cards = 3 stones, Wyatt 7/18), so the
-                // old Math.max idempotency no longer guards slot re-fires.
-                // Each slot's stone grant pays once per game instead.
-                if (this.grantSlotStones(player, 'philosopher_stone', 1)) {
+                // POSITIONAL (Wyatt 7/23): the slot's stone is yours only
+                // while the ring stands here — getStoneCount reads it off
+                // the current slot, exactly like slot Mind's Eyes. Nothing
+                // to grant on landing; the log still narrates the offer.
+                if (player.sliderPosition >= 0) {
                     this.addLog(`${player.name} gains Philosopher's Stone (1:1 gold\u2192favor)`);
                 }
                 break;
 
             case 'philosopher_stone_x2':
-                if (this.grantSlotStones(player, 'philosopher_stone_x2', 2)) {
+                if (player.sliderPosition >= 0) {
                     this.addLog(`${player.name} gains 2\u00D7 Philosopher's Stone (2:1 gold\u2192favor)`);
                 }
                 break;
@@ -1375,8 +1436,8 @@ class FavorGame {
                 break;
 
             case 'minds_eye_and_philosopher':
-                // Mind's Eye (+1 knowledge ongoing) + Philosopher's Stone (1:1)
-                if (this.grantSlotStones(player, 'minds_eye_and_philosopher', 1)) {
+                // Mind's Eye + Philosopher's Stone — both POSITIONAL reads.
+                if (player.sliderPosition >= 0) {
                     this.addLog(`${player.name} gains Mind's Eye + Philosopher's Stone from character board`);
                 }
                 break;
@@ -1399,6 +1460,10 @@ class FavorGame {
                         // choice: local shows the picker, remote awaits the
                         // owner's streamed pick. Never auto-decided.
                         player._pendingSlotMission = true;
+                    } else if (window.FAI && window.FAI.isHard(this, player.index)) {
+                        // Hard: branch-EV pick — a mission worth LOSING is
+                        // a legitimate take (js/ai.js).
+                        this.chooseMission(player.index, window.FAI.bestMission(this, player.index));
                     } else {
                         // AI: auto-pick best mission
                         let bestIdx = 0;
@@ -1905,13 +1970,14 @@ class FavorGame {
             // Only grant once — check if we already awarded it
             if (!player.mapBonusAwarded) {
                 player.mapBonusAwarded = true;
-                // AUDIT FIX 2026-07-14: pays 20, not 15. The Lost South Map prints
-                // a blue 20 beside its "2/2" plaque, and its own audit text says
-                // "If you have the Lost North Map 20 additional Favor". The engine
-                // was the only voice saying 15 — and no checker looked at combos.
-                this.awardFavor(playerIndex, 20, 'card', 'Both Map halves found',
-                    { type: card.type, file: card.filename });
-                this.addLog(`${player.name} completes the Map! Both halves found: +20 Favor!`);
+                // 7/14 fixed the AMOUNT (20, not 15); 7/23 Wyatt fixed the
+                // CURRENCY — the pair pays 20 PRESTIGE, not Favor (his art
+                // read; the old audit transcription said Favor and was
+                // wrong). Paid the moment the second half lands, so it
+                // rides the Prestige row — the Artifacts drill carries an
+                // explanatory note instead of a favor row.
+                player.prestige += 20;
+                this.addLog(`${player.name} completes the Map! Both halves found: +20 Prestige!`);
             }
         }
     }
@@ -2063,10 +2129,12 @@ class FavorGame {
         const p = this.players[playerIndex];
         let favor = mission.favorValue || 0;
         switch (mission.successSpecial) {
-            case 'favor_per_charisma_x2':   favor += 2 * (p.skills.charisma || 0); break;
-            case 'favor_per_knowledge_x1':  favor += (p.skills.knowledge || 0); break;
+            // Estimates read the same flex-aware count the payer uses —
+            // an AI weighing this mission must see the number it will get.
+            case 'favor_per_charisma_x2':   favor += 2 * this.formulaSkillCount(playerIndex, ['charisma']); break;
+            case 'favor_per_knowledge_x1':  favor += this.formulaSkillCount(playerIndex, ['knowledge']); break;
             case 'favor_per_minds_eye_x5':  favor += 5 * this.getMindsEyeCount(playerIndex); break;
-            case 'favor_per_philstone_x10': favor += 10 * (p.philosopherStone || 0); break;
+            case 'favor_per_philstone_x10': favor += 10 * this.getStoneCount(playerIndex); break;
         }
         return favor;
     }
@@ -2101,6 +2169,7 @@ class FavorGame {
         if (success) {
             this.applyMissionRewards(playerIndex, mission);
             player.completedMissions.push(mission);
+            if (playerIndex === 0 && window.FALM) window.FALM.recordMission(mission);
         } else {
             player.failedMissions.push(mission);
             this.applyMissionFailure(playerIndex, mission);
@@ -2127,7 +2196,7 @@ class FavorGame {
             if (req === 'minds_eye') {
                 if (this.getMindsEyeCount(playerIndex) < n) return null;
             } else if (req === 'philosopher_stone') {
-                if ((player.philosopherStone || 0) < n) return null;
+                if (this.getStoneCount(playerIndex) < n) return null;
             } else {
                 skillReqs[req] = n;
             }
@@ -2192,6 +2261,7 @@ class FavorGame {
         player.missions.splice(missionIndex, 1);
         this.applyMissionRewards(playerIndex, mission);
         player.completedMissions.push(mission);
+        if (playerIndex === 0 && window.FALM) window.FALM.recordMission(mission);
         const skills = plan.borrowFrom.map(b => b.skill).join(', ');
         const lenders = [...new Set(plan.borrowFrom.map(b => this.players[b.neighborIndex].name))].join(' & ');
         this.addLog(`${player.name} borrows ${skills} from ${lenders} (−${plan.cost}g) to complete ${mission.name}`);
@@ -2322,10 +2392,23 @@ class FavorGame {
             // attempted mission then walks exactly the same road as a due one).
             const isDue = (m) => this.missionDueAct(m) <= this.currentAct || m._attemptNow === true;
 
+            // PAY ORDER (Wyatt 7/23, the second Golden Fiddle bug): within
+            // one resolution phase, missions that GRANT skills must land
+            // before missions whose formula COUNTS skills — his table
+            // banked the Fiddle before A Day With the Birds' +3 Charisma
+            // because he'd TAKEN it first, and the identical missions paid
+            // 6 or 12 by acquisition order alone. A physical player banks
+            // in the best order; the stable partition below gives every
+            // seat that order deterministically (lockstep-identical), and
+            // the fixed-point sweep still lets ANY mission's grants unlock
+            // requirement chains across passes.
+            const paysFormula = (m) => String(m.successSpecial || '').indexOf('favor_per_') === 0;
+            const inPayOrder = (arr) => [...arr.filter(m => !paysFormula(m)), ...arr.filter(paysFormula)];
+
             let progressed = true;
             while (progressed) {
                 progressed = false;
-                player.missions.forEach((mission) => {
+                inPayOrder(player.missions).forEach((mission) => {
                     if (resolved.has(mission) || !inWindow(mission)) return;
                     // Not due and not attempted: a HUMAN seat decides this at
                     // the act boundary, never automatically. Only a true AI
@@ -2334,9 +2417,17 @@ class FavorGame {
                     if (!isDue(mission) && humanSeat) return;
                     const { success, details } = this.checkMissionRequirements(pi, mission);
                     if (!success) return;
+                    // A Hard seat never banks a mission whose FAILURE line
+                    // pays better (Alchemic Seige: fail +20 vs success −10).
+                    // Skipped here, it stays unresolved; when due, the pass
+                    // below finds nothing to borrow and loses it on purpose
+                    // — the same failMissionByChoice road a human walks.
+                    if (!humanSeat && window.FAI && window.FAI.isHard(this, pi)
+                        && window.FAI.wantsFailOnPurpose(this, pi, mission)) return;
                     resolved.add(mission);
                     const deltas = measure(pi, () => this.applyMissionRewards(pi, mission));
                     player.completedMissions.push(mission);
+                    if (pi === 0 && window.FALM) window.FALM.recordMission(mission);
                     playerResults.push({ mission, success: true, details, deltas });
                     progressed = true;   // its rewards may unlock a sibling
                 });
@@ -2344,7 +2435,7 @@ class FavorGame {
 
             // Fixed point reached — nothing else can be met on skills alone.
             // ONLY NOW may a due mission borrow or fail.
-            player.missions.forEach((mission, mi) => {
+            inPayOrder(player.missions).forEach((mission, mi) => {
                 if (resolved.has(mission) || !inWindow(mission) || !isDue(mission)) return;
                 // Re-read the shortfall against the FINAL state, so a beat
                 // reports what they were actually short of at the end.
@@ -2355,7 +2446,12 @@ class FavorGame {
                     // a chooser (endActPhases pauses the phase, same pattern
                     // as _pendingPenaltyDiscard); the AI borrows only when
                     // the mission's favor clearly beats the gold fee.
-                    const plan = this.missionBorrowPlan(pi, mission);
+                    // Hard seats pick their lenders (fund the TRAILING seat,
+                    // never the leader) and judge the rescue in branch EV;
+                    // casual seats keep the old first-available plan.
+                    const hardSeat = !humanSeat && window.FAI && window.FAI.isHard(this, pi);
+                    const plan = this.missionBorrowPlan(pi, mission,
+                        hardSeat ? window.FAI.preferredLenders(this, pi, mission) : undefined);
                     if (plan && humanSeat) {
                         player._pendingMissionBorrows = player._pendingMissionBorrows || [];
                         player._pendingMissionBorrows.push(mission);
@@ -2365,7 +2461,10 @@ class FavorGame {
                     // worth at least the fee is taken; generic bots still
                     // demand a clear 2× win. Judgment only — no stat cheats.
                     const borrowBar = plan ? plan.cost * (player._personaAI ? 1 : 2) : Infinity;
-                    if (plan && !humanSeat && this.missionFavorEstimate(pi, mission) >= borrowBar) {
+                    const wantsBorrow = hardSeat
+                        ? (plan && window.FAI.borrowWorth(this, pi, mission, plan))
+                        : (plan && this.missionFavorEstimate(pi, mission) >= borrowBar);
+                    if (plan && !humanSeat && wantsBorrow) {
                         const deltas = measure(pi, () => {
                             player.gold -= plan.cost;
                             plan.borrowFrom.forEach(b => {
@@ -2375,6 +2474,7 @@ class FavorGame {
                         });
                         resolved.add(mission);
                         player.completedMissions.push(mission);
+                        if (pi === 0 && window.FALM) window.FALM.recordMission(mission);
                         this.addLog(`${player.name} borrows ${plan.borrowFrom.map(b => b.skill).join(', ')} (−${plan.cost}g) to complete ${mission.name}`);
                         playerResults.push({ mission, success: true, details, borrowed: plan.cost, deltas });
                         return;
@@ -2444,7 +2544,7 @@ class FavorGame {
                     met = false;
                 }
             } else if (req === 'philosopher_stone') {
-                if ((player.philosopherStone || 0) < n) {
+                if (this.getStoneCount(playerIndex) < n) {
                     missing.push(n > 1 ? `${req} ×${n}` : req);
                     met = false;
                 }
@@ -2493,6 +2593,14 @@ class FavorGame {
 
     applyMissionRewards(playerIndex, mission) {
         const player = this.players[playerIndex];
+        // A mission's Gold requirement is a COST, paid on completion (Wyatt
+        // 7/23: "you can pass them and then keep the money" — no more).
+        // Solvency was checked upstream, so the purse covers it; a FAILED
+        // mission charges nothing — you kept the gold and lost the mission.
+        if (mission.reqGold) {
+            player.gold = Math.max(0, (player.gold || 0) - mission.reqGold);
+            this.addLog(`${player.name} pays ${mission.reqGold} Gold to complete ${mission.name}`);
+        }
         const s = mission.successRewards || {};
         if (s.favor) {
             this.awardFavor(playerIndex, s.favor, 'mission', mission.name,
@@ -2522,6 +2630,26 @@ class FavorGame {
         this.addLog(`${player.name} completes mission: ${mission.name}`);
     }
 
+    /**
+     * A skill as a FORMULA counts it: the fixed tally plus every flex
+     * ("OR") unit that can stand as one of the named skills. Flex units
+     * live OUTSIDE player.skills (so displayed totals never wander), which
+     * is exactly why "2 Favor for Each Charisma" paid Wyatt 6 on a table
+     * showing 12 (7/23) — the Mining-Guild class of card never counted.
+     * One flex unit counts ONCE, even when a formula names both of its
+     * skills (Great Vault Key sums survival+charisma+prospecting; a
+     * charisma|prospecting card is still one unit on the table).
+     */
+    formulaSkillCount(playerIndex, skillNames) {
+        const p = this.players[playerIndex];
+        let n = 0;
+        skillNames.forEach(s => { n += p.skills[s] || 0; });
+        (p.flexSkills || []).forEach(pair => {
+            if (pair.some(s => skillNames.includes(s))) n += 1;
+        });
+        return n;
+    }
+
     resolveMissionSuccessSpecial(playerIndex, mission) {
         const player = this.players[playerIndex];
         // Scaled mission payouts are MISSION favor. They used to land in the
@@ -2535,10 +2663,10 @@ class FavorGame {
         };
         switch (mission.successSpecial) {
             case 'favor_per_charisma_x2':
-                payMission(2 * (player.skills.charisma || 0), '2 per Charisma');
+                payMission(2 * this.formulaSkillCount(playerIndex, ['charisma']), '2 per Charisma');
                 break;
             case 'favor_per_knowledge_x1':
-                payMission(player.skills.knowledge || 0, '1 per Knowledge');
+                payMission(this.formulaSkillCount(playerIndex, ['knowledge']), '1 per Knowledge');
                 break;
             case 'favor_per_minds_eye_x5':
                 payMission(5 * this.getMindsEyeCount(playerIndex), "5 per Mind's Eye");
@@ -2562,31 +2690,72 @@ class FavorGame {
                 // King of the Sky — the one printed mechanic that pays FOR
                 // stones. Stones themselves are a requirement resource, never
                 // a scoring multiplier (see calculateFinalScores).
-                payMission(10 * (player.philosopherStone || 0), "10 per Philosopher's Stone");
+                payMission(10 * this.getStoneCount(playerIndex), "10 per Philosopher's Stone");
                 break;
-            case 'duplicate_artifact': {
-                const arts = player.playedCards.filter(c => c.type === 'artifact');
-                const pick = arts[arts.length - 1];
-                if (pick) {
-                    const copy = { ...pick, id: `${pick.id}_dup${Date.now() % 100000}` };
-                    player.playedCards.push(copy);
-                    (copy.skills || []).forEach(sk => { player.skills[sk] = (player.skills[sk] || 0) + 1; });
-                    this.addLog(`${player.name} duplicates ${pick.name}`);
-                }
-                break;
-            }
+            case 'duplicate_artifact':
             case 'duplicate_potion': {
-                const pots = player.playedCards.filter(c => c.type === 'potion');
-                const pick = pots[pots.length - 1];
-                if (pick) {
-                    const copy = { ...pick, id: `${pick.id}_dup${Date.now() % 100000}` };
-                    player.playedCards.push(copy);
-                    if (copy.special) this.resolveSpecial(playerIndex, copy); // potions fire instantly
-                    this.addLog(`${player.name} duplicates ${pick.name} — it fires again!`);
+                // "Choose one Artifact/Potion you own" — the CHOICE is the
+                // player's (Wyatt 7/23: the Mirror Gate picked for him).
+                // Human seats pause on a flag (chooser/stream resolves it,
+                // the endActPhases pattern); AI applies the shared argmax.
+                const fam = mission.successSpecial === 'duplicate_artifact' ? 'artifact' : 'potion';
+                if (!player.playedCards.some(c => c.type === fam)) {
+                    this.addLog(`${player.name} has no ${fam} to duplicate`);
+                    break;
+                }
+                player._pendingDuplicatePick = fam;
+                if (!(playerIndex === 0 || player._remoteHuman)) {
+                    this.applyDuplicatePick(playerIndex, this.aiDuplicatePick(playerIndex, fam));
                 }
                 break;
             }
         }
+    }
+
+    /**
+     * The AI's duplicate — and the fallback EVERY client computes for a
+     * booted/silent seat: the family's most valuable card by scoring
+     * favor, stable index-order tie-break. Pure: reads state only.
+     */
+    aiDuplicatePick(playerIndex, fam) {
+        const pool = this.players[playerIndex].playedCards.filter(c => c.type === fam);
+        let best = null, bestV = -Infinity;
+        pool.forEach(c => {
+            const v = this.scoredCardFavor(playerIndex, c);
+            if (v > bestV) { bestV = v; best = c; }
+        });
+        return best ? best.id : null;
+    }
+
+    /**
+     * Duplicate the chosen card — THE single mutation point (local picker,
+     * remote stream, AI heuristic all land here, in stream order on every
+     * client). An unknown/absent id falls back to the deterministic AI
+     * pick. The copy's id is a per-player SEQUENCE, never a clock — the
+     * old `Date.now()` suffix minted a different id on every lockstep
+     * client, and playedCards ids feed mpStateHash.
+     */
+    applyDuplicatePick(playerIndex, cardId) {
+        const player = this.players[playerIndex];
+        const fam = player._pendingDuplicatePick;
+        player._pendingDuplicatePick = null;
+        if (!fam) return { success: false, error: 'No duplicate pending' };
+        const family = player.playedCards.filter(c => c.type === fam);
+        if (!family.length) return { success: false, error: 'Nothing to duplicate' };
+        const pick = family.find(c => c.id === cardId)
+            || family.find(c => c.id === this.aiDuplicatePick(playerIndex, fam));
+        if (!pick) return { success: false, error: 'Nothing to duplicate' };
+        player._dupSeq = (player._dupSeq || 0) + 1;
+        const copy = { ...pick, id: `${pick.id}_dup${player._dupSeq}` };
+        player.playedCards.push(copy);
+        if (pick.type === 'potion') {
+            if (copy.special) this.resolveSpecial(playerIndex, copy); // potions fire instantly
+            this.addLog(`${player.name} duplicates ${pick.name} — it fires again!`);
+        } else {
+            (copy.skills || []).forEach(sk => { player.skills[sk] = (player.skills[sk] || 0) + 1; });
+            this.addLog(`${player.name} duplicates ${pick.name}`);
+        }
+        return { success: true, card: copy, source: pick };
     }
 
     /**
@@ -3124,16 +3293,20 @@ class FavorGame {
         const n = this.playerCount;
         switch (card.special) {
             case 'favor_per_survival_x2':
-                return 2 * (p.skills.survival || 0);
+                // formulaSkillCount, not the raw tally — a flex ("OR") card
+                // that can stand as Survival counts here, exactly as it
+                // would on the physical table (7/23, the Golden Fiddle bug's
+                // card-side siblings).
+                return 2 * this.formulaSkillCount(playerIndex, ['survival']);
             case 'favor_per_quest_x5':
                 return 5 * (p.completedMissions || []).length;
             case 'favor_per_knowledge_x2':
                 // Family Ring, exactly as printed: "Favor equal to your total
-                // Knowledge x2". Reads the plain skill tally, matching its
-                // siblings favor_per_knowledge_x1 and favor_per_survival_x2.
-                return 2 * (p.skills.knowledge || 0);
+                // Knowledge x2" — through the same flex-aware formula read.
+                return 2 * this.formulaSkillCount(playerIndex, ['knowledge']);
             case 'favor_per_sur_cha_pro':
-                return (p.skills.survival || 0) + (p.skills.charisma || 0) + (p.skills.prospecting || 0);
+                // One flex unit counts ONCE across the three named skills.
+                return this.formulaSkillCount(playerIndex, ['survival', 'charisma', 'prospecting']);
             case 'favor_per_artifact_x8':
                 // Sacred Chest, exactly as printed: "8 Favor for each Artifact
                 // Card you have" — the purple oval in its Favor medallion is
