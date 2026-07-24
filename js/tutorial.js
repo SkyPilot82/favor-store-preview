@@ -195,9 +195,21 @@
         location.assign('index.html');
     }
 
+    // Phone landscape runs the TABLE VIEW (tv-* ids); desktop runs .game-layout.
+    // Map each desktop anchor to its table-view twin and let coachEl (ui.js) pick
+    // whichever is actually VISIBLE — same helper the in-game coach-marks use.
+    const PHONE_ALT = {
+        '#boardThumb': '#tvBoardThumb',
+        '.stats-panel': '#tvPurse',
+        '.mission-strip': '#tvMissionRail',
+        '#handZone': '#tvHandStrip',
+    };
     function targetEl(s) {
         if (!s || !s.target) return null;
-        return typeof s.target === 'function' ? s.target() : document.querySelector(s.target);
+        if (typeof s.target === 'function') return s.target();
+        const alt = PHONE_ALT[s.target];
+        if (alt && typeof coachEl === 'function') return coachEl(alt, s.target);
+        return document.querySelector(s.target);
     }
 
     function layout() {
@@ -247,11 +259,14 @@
         bubble.classList.remove('tut-b-center', 'tut-b-corner');
         if (s.mode === 'watch') { bubble.classList.add('tut-b-corner'); bubble.style.left = ''; bubble.style.top = ''; return; }
         if (!rect) { bubble.classList.add('tut-b-center'); bubble.style.left = ''; bubble.style.top = ''; return; }
-        const bw = Math.min(430, window.innerWidth - 24);
+        // Use the REAL bubble size (compact CSS makes it narrower/shorter on phones).
+        const bw = bubble.offsetWidth || Math.min(430, window.innerWidth - 24);
         const bh = bubble.offsetHeight || 180;
-        let x = Math.min(Math.max(12, rect.x + rect.w / 2 - bw / 2), window.innerWidth - bw - 12);
+        let x = Math.min(Math.max(8, rect.x + rect.w / 2 - bw / 2), window.innerWidth - bw - 8);
         let yy = rect.y + rect.h + 14;
-        if (yy + bh > window.innerHeight - 10) yy = Math.max(10, rect.y - bh - 14);
+        if (yy + bh > window.innerHeight - 10) yy = rect.y - bh - 14;   // flip above
+        // Never let the bubble sit partly off a short screen — clamp on-screen.
+        yy = Math.max(8, Math.min(yy, window.innerHeight - bh - 8));
         bubble.style.left = x + 'px';
         bubble.style.top = yy + 'px';
     }
@@ -261,7 +276,10 @@
 
     function applyPulse(s) {
         if (!s.pulse) return;
-        const p = document.querySelector(s.pulse);
+        // Both layouts share class names (.hand-card, [data-act]) with one copy
+        // hidden — pulse the VISIBLE one (offsetParent is null when hidden).
+        const all = [...document.querySelectorAll(s.pulse)];
+        const p = all.find(e => e.offsetParent !== null) || all[0];
         if (p) { p.classList.add('tut-pulse'); if (s.pulseCls) p.classList.add(s.pulseCls); pulseEl = p; }
     }
 
@@ -466,7 +484,7 @@
     },
     {
         id: 'green-glow', target: '#handZone', advance: 'next', pad: 16,
-        pulse: '#handZone .hand-card.playable', pulseCls: 'tut-pulse-green',
+        pulse: '.hand-card.playable', pulseCls: 'tut-pulse-green',
         title: 'The Green Glow',
         text: `See Hunting breathing <span class="tut-green">green</span>? Green means
                <b>you can play it right now</b> — you meet its cost as things stand
@@ -478,7 +496,7 @@
     },
     {
         id: 'throw-hunting', target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
-        pulse: '#handZone .hand-card.playable', pulseCls: 'tut-pulse-green',
+        pulse: '.hand-card.playable', pulseCls: 'tut-pulse-green',
         title: 'Throw Your First Card',
         text: `Drag <b>Hunting</b> up toward the table to commit it, face-down.`,
         why: 'First real action — the commit gesture, done by the player, not a button.',

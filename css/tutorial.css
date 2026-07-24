@@ -107,3 +107,32 @@
 }
 .tut-finale-card h2 { font-family: 'Cinzel', serif; color: #e9d48b; margin: 4px 0 10px; }
 .tut-finale-card p { margin-bottom: 16px; line-height: 1.55; }
+
+/* ─── PHONE LANDSCAPE (iPhone etc.) — short viewport, table-view layout ───
+   The bubble is sized for tall screens; on a ~390px-tall landscape phone it
+   must shrink and, worst case, scroll internally so the Next button is ALWAYS
+   reachable. Anatomy art shrinks too. Matches the game's own compact breakpoint. */
+@media (orientation: landscape) and (max-height: 540px) {
+    #tutBubble {
+        width: min(340px, calc(100vw - 20px));
+        max-height: calc(100dvh - 16px);
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
+        padding: 10px 14px 10px; font-size: 13.5px; line-height: 1.4;
+        border-radius: 12px;
+    }
+    #tutBubble.tut-b-center { top: 50% !important; }
+    /* Watch-mode corner bubble: keep it clear of the bottom hand strip */
+    #tutBubble.tut-b-corner { width: min(300px, calc(100vw - 20px)); bottom: 8px; left: 8px !important; font-size: 12.5px; }
+    .tut-kicker { font-size: 9px; }
+    .tut-title { font-size: 15px; margin: 2px 0 4px; }
+    .tut-next { margin-top: 7px; padding: 8px 14px; }
+    .tut-next span { font-size: 13px; }
+    .tut-count { margin-top: 5px; }
+    /* Anatomy: smaller card + labels so the whole thing fits a short screen */
+    .tut-anat2 { gap: 6px; margin: 8px auto 3px; }
+    .tut-anat2 .aa-card { width: 92px; }
+    .tut-anat2 .aa-lbl { font-size: 9.5px; padding: 4px 5px; line-height: 1.25; }
+    .tut-anat-cap { font-size: 10.5px; margin-top: 5px; }
+    /* Skip button: smaller, out of the way */
+    #tutSkip { top: 6px; right: 8px; padding: 4px 8px; font-size: 10px; }
+}
