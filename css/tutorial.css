@@ -56,11 +56,43 @@
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
 }
 
+/* Card anatomy v2: art centered, callout labels in the SIDE GUTTERS so they
+   never cover the symbols they point at. */
+.tut-anat2 {
+    display: flex; align-items: flex-start; justify-content: center;
+    gap: 8px; margin: 12px auto 4px;
+}
+.tut-anat2 .aa-card { width: 140px; flex: 0 0 auto; }
+.tut-anat2 .aa-card img {
+    width: 100%; border-radius: 8px; border: 1px solid rgba(201, 168, 76, 0.5); display: block;
+}
+.tut-anat2 .aa-side { flex: 1 1 0; align-self: center; }
+.tut-anat2 .aa-lbl {
+    display: block; background: rgba(20, 12, 4, 0.92);
+    border: 1px solid rgba(201, 168, 76, 0.5); border-radius: 8px;
+    padding: 6px 8px; font-size: 11px; line-height: 1.35; color: #ffe9a8;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+.tut-anat2 .aa-side.left { text-align: right; }
+.tut-anat2 .aa-side.right { text-align: left; }
+.tut-anat-cap {
+    margin: 8px auto 2px; max-width: 380px; text-align: center;
+    font-size: 12.5px; line-height: 1.4; color: #e7d7b4;
+}
+.tut-anat-cap b { color: #9fd0ff; }
+
 /* Pulse on the exact control the step wants tapped. */
 .tut-pulse { animation: tutPulse 1.4s ease-in-out infinite !important; }
 @keyframes tutPulse {
     0%, 100% { box-shadow: 0 0 0 2px rgba(233, 212, 139, 0.9), 0 0 18px 5px rgba(233, 212, 139, 0.45); }
     50%      { box-shadow: 0 0 0 3px rgba(233, 212, 139, 1),   0 0 26px 9px rgba(233, 212, 139, 0.65); }
+}
+/* Green variant — used on the glow-teaching steps so the "breathing" matches
+   the word "green" (the gold pulse read as orange over the card's green glow). */
+.tut-pulse.tut-pulse-green { animation: tutPulseGreen 1.4s ease-in-out infinite !important; }
+@keyframes tutPulseGreen {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(120, 225, 110, 0.9), 0 0 18px 6px rgba(120, 225, 110, 0.5); }
+    50%      { box-shadow: 0 0 0 3px rgba(140, 235, 125, 1),   0 0 28px 10px rgba(120, 225, 110, 0.7); }
 }
 
 /* Finale */

@@ -186,6 +186,15 @@
         if (!active) return;
         const s = STEPS[stepIdx];
         if (!s) return;
+        // A ready-gated step stays INVISIBLE until its moment arrives — no
+        // bubble or shield pops over the reveal cinematic playing behind it.
+        if (!armed) {
+            hole.style.display = 'none';
+            blockers.forEach(b => { b.style.display = 'none'; });
+            bubble.style.display = 'none';
+            return;
+        }
+        bubble.style.display = '';
         const el = targetEl(s);
         const watch = s.mode === 'watch';
         root.classList.toggle('tut-watch', watch);
@@ -230,7 +239,13 @@
     }
 
     // ── Step engine ──────────────────────────────────────────────────
-    let pulseEl = null, clickArm = null;
+    let pulseEl = null, clickArm = null, armed = true;
+
+    function applyPulse(s) {
+        if (!s.pulse) return;
+        const p = document.querySelector(s.pulse);
+        if (p) { p.classList.add('tut-pulse'); if (s.pulseCls) p.classList.add(s.pulseCls); pulseEl = p; }
+    }
 
     function showStep(i) {
         stepIdx = i;
@@ -244,15 +259,17 @@
         bubble.querySelector('.tut-next').style.display = s.advance === 'next' ? '' : 'none';
         bubble.querySelector('.tut-count').textContent = `${i + 1} / ${STEPS.length}`;
         clearPulse();
-        if (s.pulse) {
-            const p = document.querySelector(s.pulse);
-            if (p) { p.classList.add('tut-pulse'); pulseEl = p; }
-        }
-        layout();
+
+        // Show the shield+bubble+pulse and start listening for advance.
+        const arm = () => { armed = true; applyPulse(s); layout(); armAdvance(s); };
+
         // Edge-trigger guard: a step that reacts to state X must not arm
         // until X has actually ARRIVED — otherwise a stale "not X yet"
-        // satisfies the exit condition instantly and the script skips.
+        // satisfies the exit condition instantly and the script skips. While
+        // it waits, the overlay is HIDDEN so the game plays unobstructed.
         if (s.ready) {
+            armed = false;
+            layout();   // hides everything while we wait
             const gate = setInterval(() => {
                 if (stepIdx !== STEPS.indexOf(s)) { clearInterval(gate); return; }
                 let r = false;
@@ -260,16 +277,16 @@
                 if (r) {
                     clearInterval(gate);
                     if (s.onReady) { try { s.onReady(); } catch (e) { console.warn('[TUT] onReady failed:', s.id, e); } }
-                    layout(); armAdvance(s);
+                    arm();
                 }
             }, 250);
         } else {
-            armAdvance(s);
+            arm();
         }
     }
 
     function clearPulse() {
-        if (pulseEl) { pulseEl.classList.remove('tut-pulse'); pulseEl = null; }
+        if (pulseEl) { pulseEl.classList.remove('tut-pulse', 'tut-pulse-green'); pulseEl = null; }
         if (clickArm) { document.removeEventListener('click', clickArm, true); clickArm = null; }
     }
 
@@ -349,9 +366,14 @@
     // THE SCRIPT — every prompt, with the why (rendered on the review
     // page). text may be a function for live values.
     // ═════════════════════════════════════════════════════════════════
-    const AN = (img, labels) => `
-        <div class="tut-anat"><img src="${img}" alt="">
-        ${labels.map(l => `<span class="tut-an-chip" style="left:${l.x}%;top:${l.y}%">${l.t}</span>`).join('')}</div>`;
+    // Card art in the CENTER, callout labels in the side gutters so they
+    // never cover the symbols they describe. o = {left:[...], right:[...], below}.
+    const AN = (img, o) => `
+        <div class="tut-anat2">
+            <div class="aa-side left">${(o.left || []).map(t => `<span class="aa-lbl">${t}</span>`).join('')}</div>
+            <div class="aa-card"><img src="${img}" alt=""></div>
+            <div class="aa-side right">${(o.right || []).map(t => `<span class="aa-lbl">${t}</span>`).join('')}</div>
+        </div>${o.below ? `<div class="tut-anat-cap">${o.below}</div>` : ''}`;
 
     const STEPS = [
     // ══════════ OPENING — the table, the pieces, the goal ══════════
@@ -414,20 +436,19 @@
         id: 'card-anatomy', target: '#handZone', advance: 'next', pad: 16,
         before: () => rigTurn(['Hunting']),
         title: 'Reading a Card',
-        text: `Here's <b>Hunting</b>, an Endeavor from your hand. Every card in the game
-               speaks the same language:`,
-        anatomy: () => AN('assets/cards/regular/Hunting Card.jpg', [
-            { x: 2, y: 8,  t: '⬅ TOP-LEFT: the COST to play — skills you must already have, or Gold' },
-            { x: 58, y: 8, t: 'TOP-RIGHT ➡ gold ovals: the skills it GRANTS you — and skills stay all game' },
-            { x: 2, y: 55, t: '⬅ Border colour = its Act. Blue is Act 1' },
-            { x: 58, y: 82, t: 'Blue shield = Favor it scores at the end ➡' },
-        ]),
+        text: `Here's <b>Hunting</b>, an Endeavor from your hand. Every card speaks the same
+               language — <b>top-left is the cost, top-right is what you gain</b>:`,
+        anatomy: () => AN('assets/cards/regular/Hunting Card.jpg', {
+            left: ['⬅ <b>TOP-LEFT — the COST.</b> Skills you must already have (Hunting needs 1 Power — your board covers it), or Gold.'],
+            right: ['<b>TOP-RIGHT — what it GRANTS ➡</b> Gold ovals are the skills you gain (here, 2 Survival). Skills stay for the whole game.'],
+            below: `Some cards also carry a blue <b>Favor</b> shield along the bottom — those score points at the very end. Hunting has none: it builds skills, not Favor.`,
+        }),
         anatomyIsFn: true,
-        why: 'The symbol legend on a real held card: left = price, right = gift, border = act, shield = score.',
+        why: 'The symbol legend on the real card, with callouts in the GUTTERS (not over the art). Only what Hunting actually has: cost (a Power requirement) + granted skills. Favor shields taught truthfully in words (Hunting has none). Dropped the false "border = Act" claim.',
     },
     {
         id: 'green-glow', target: '#handZone', advance: 'next', pad: 16,
-        pulse: '#handZone .hand-card.playable',
+        pulse: '#handZone .hand-card.playable', pulseCls: 'tut-pulse-green',
         title: 'The Green Glow',
         text: `See Hunting breathing <span class="tut-green">green</span>? Green means
                <b>you can play it right now</b> — you meet its cost as things stand
@@ -439,7 +460,7 @@
     },
     {
         id: 'throw-hunting', target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
-        pulse: '#handZone .hand-card.playable',
+        pulse: '#handZone .hand-card.playable', pulseCls: 'tut-pulse-green',
         title: 'Throw Your First Card',
         text: `Drag <b>Hunting</b> up toward the table to commit it, face-down.`,
         why: 'First real action — the commit gesture, done by the player, not a button.',
@@ -453,6 +474,19 @@
                <b>Discard</b> it for +3 Gold or a free ring slide. Hit <b>Play</b>: those
                2 Survival are yours to keep.`,
         why: 'The action panel decides every turn; Play now, Discard named for later.',
+    },
+    {
+        id: 'rivals-reveal', mode: 'watch',
+        // Advance when the reveal is done and the next turn opens — phase back to
+        // 'gameplay' (stays true even once you throw, so a quick throw can't
+        // starve the gate the way a pending===null check could).
+        advance: () => game.phase === 'gameplay',
+        title: 'The Other Heirs Reveal',
+        text: `You went first as the <b>Emblem holder</b>. Now Sir Aldric's and Old Wren's
+               cards flip and resolve in turn — <b>watch what they play</b>. Every card
+               they lay down is skills or Power they're building, just like you. This
+               reveal happens after every turn; from here I'll let it play out quietly.`,
+        why: "Wyatt: explain what's happening while the other players play their cards. Taught ONCE — a watch beat that HOLDS through the rivals' spotlight reveals (advance waits for the next gameplay turn) instead of popping Turn 2's bubble over them.",
     },
 
     // ══════════ TURN 2 — WEAPON (Power feeds the Melee) ══════════
@@ -531,9 +565,9 @@
         id: 'mission-held', ready: () => gameplayIdle(), target: '.mission-strip', advance: 'next',
         title: "Yours Now — Resolves at Act's End",
         text: `The mission is yours, held face-down. Missions resolve when the Act ends:
-               meet the requirement then and the reward is yours — and you may even
-               <b>borrow skills</b> to get there. Fall short and the grey consequence bites.`,
-        why: 'Sets the timing expectation so the missions phase is anticipated, not surprising.',
+               meet the requirement then and the reward is yours; fall short and the grey
+               consequence bites. Keep building toward those 3 Survival & 3 Power.`,
+        why: 'Sets the timing expectation so the missions phase is anticipated. Borrow reference removed — kept for Act 2 per Wyatt.',
     },
 
     // ══════════ TURN 4 — ENDEAVOR (finish the mission requirement) ══════════
@@ -555,7 +589,7 @@
         why: 'Confirms the requirement is met before the resolution.',
     },
 
-    // ══════════ TURN 5 — DISCARD & BORROW (the bad-hand economy) ══════════
+    // ══════════ TURN 5 — DISCARD (the bad-hand economy; Borrow waits for Act 2) ══════════
     {
         id: 'discard-turn', ready: () => gameplayIdle(), target: '#handZone',
         onReady: () => rigTurn(['Cooking']),
@@ -569,21 +603,23 @@
         id: 'discard-panel', ready: () => panelActive(), target: '#actionPanel',
         advance: () => !panelActive(), pulse: '#actionPanel [data-act="discard"]',
         title: 'Discard = Gold or Movement',
-        text: `Can't play it? Every card is still worth <b>+3 Gold</b> — or a free
-               <b>ring slide</b>. (If a card only lacks SKILLS, you can instead
-               <b>Borrow</b> them from a neighbour at 2 Gold each.) Take the Gold.`,
-        why: "The discard/borrow economy keeps bad hands fun; borrow is named on a card that can't be played.",
+        text: `Can't play it? Every card is still worth something: <b>+3 Gold</b>, or a free
+               <b>ring slide</b> on your board. A bad card is never a wasted turn. Take the Gold.`,
+        why: "The discard economy keeps bad hands fun. Borrowing is DELIBERATELY not taught here — it never comes up in Act 1 (Wyatt); it's introduced and demonstrated in Act 2 where it's actually used.",
     },
 
     // ══════════ TURN 6 — THE LAST TWO ══════════
     {
         id: 'final-turn', mode: 'watch',
-        advance: () => game.phase !== 'gameplay' || you().hand.length === 0,
+        // Wait until the Act truly ENDS (missions phase begins) — NOT the moment
+        // the hand empties (that fires the instant you THROW your last two, before
+        // you've revealed and played them). Wyatt saw this jump away too early.
+        advance: () => game.phase === 'missions',
         title: 'Play Out the Act',
         text: `Down to your last cards — when only two remain you play <b>both</b> at once.
-               Commit them and let the reveals run. That's the whole draft: play one, pass
-               the rest, until the Act empties.`,
-        why: 'Every turn is prompted, but the loop is learned — a watch beat carries the final plays without re-teaching the panel.',
+               Commit them, then <b>reveal and play each one</b> as it comes up. That's the
+               whole draft: play, pass, until the Act empties — then missions resolve.`,
+        why: 'Every turn is prompted, but the loop is learned — a watch beat carries the final plays. Advances on phase===missions so it HOLDS through the last two reveals instead of vanishing the instant the hand empties (Wyatt).',
     },
 
     // ══════════ MISSIONS PHASE — hard-paced, narrated ══════════
