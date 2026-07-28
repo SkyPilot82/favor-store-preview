@@ -13,10 +13,22 @@
  * lesson card is always first — the draft's pass-left rotation and the rivals'
  * picks stay genuine.
  *
- * SCOPE: this file currently scripts the Act 1 SLICE (opening → every draft
- * turn → mission claim → missions phase → Melee → "Act 1 Complete"). Acts 2 & 3
- * (potions, artifacts, Map free-play, Mind's Eye / Philosopher's Stone, final
- * scoring) follow the same skeleton and are built next.
+ * SCOPE: the complete three-Act game, but the grip loosens as it goes.
+ *   Act 1  — every single turn prompted and shielded; the player learns the loop.
+ *   Act 2  — only the NEW things stop play (a Map's free play, borrowing, the
+ *            Potion, the Mind's Eye / Philosopher's Stone gates, Artifacts);
+ *            every other turn is theirs, unshielded (`freeTurn`).
+ *   Act 3  — no new rules exist, so nothing interrupts but the Melee and the
+ *            final score sheet.
+ * At the end of Acts 1 and 2 the player is offered a FORK: carry on with the
+ * guide, or `release()` — the tutorial tears itself down and this same game
+ * continues as a normal one, board and score intact.
+ *
+ * Act 1's lessons are rigged BY NAME (every turn is scripted, so the state at
+ * each beat is known). From Act 2 the player chooses their own cards, so the
+ * lessons rig ADAPTIVELY instead — scoring every card reachable this act against
+ * live state (see rigBest / borrowPlan) — and a lesson that no longer applies
+ * removes itself via `skipIf` rather than lying.
  *
  * Integration contract (root game):
  *   reads/writes `game` (ui.js top-level binding), sets window.TUT_ACTIVE,
@@ -94,6 +106,7 @@
     // Cards the rig must never swap OUT of the hand to make room for another.
     // Act 1 lesson set: Hunting (endeavor+green glow), Shark Tooth (weapon/Power),
     // First Aid (endeavor, tops Survival to 3 for the mission), the Letter.
+    // Act 2 adds Great North Connection (the Map payoff / Trade Route).
     const KEY_NAMES = ['Hunting', 'Shark Tooth', 'First Aid', 'Mission Letter', 'Great North Connection'];
 
     function rigTurn(preds) {
@@ -102,6 +115,73 @@
             pullCard(isName ? byName(p) : p, KEY_NAMES, isName ? p : null);
         });
         renderGameState();
+    }
+
+    // ── Adaptive rigging (Acts 2 & 3) ────────────────────────────────
+    // Act 1 rigs cards BY NAME because every turn is scripted, so the state at
+    // each lesson is known exactly. From Act 2 the player picks their own cards
+    // on the free turns, so a named card can be the wrong lesson by the time we
+    // reach it ("borrow the skill you lack" is nonsense if they've since built
+    // it). These pickers instead score every card reachable this act against
+    // LIVE state and rig whichever one actually teaches the lesson.
+    function reachableCards() {
+        const act = game.currentAct;
+        const out = [...game.players[0].hand];
+        (game.actDecks[act] || []).forEach(c => out.push(c));
+        for (let i = 1; i < game.playerCount; i++) out.push(...game.players[i].hand);
+        return out;
+    }
+    // Highest-scoring card wins; a score of null/-Infinity means "not a fit".
+    function rigBest(scoreFn) {
+        let best = null, bestScore = -Infinity;
+        reachableCards().forEach(c => {
+            let s;
+            try { s = scoreFn(c); } catch (e) { return; }
+            if (s == null || !isFinite(s)) return;
+            if (s > bestScore) { bestScore = s; best = c; }
+        });
+        if (!best) return null;
+        // If the pull fails the card is NOT in hand — report no lesson rather
+        // than pulse and narrate a card the player cannot see.
+        if (!pullCard(x => x.id === best.id, KEY_NAMES, best.name)) return null;
+        renderGameState();
+        return best;
+    }
+    // Can the player cover this card's gap by BORROWING right now? Mirrors the
+    // exact conditions ui.js uses to offer the "Borrow & Play" button, so a card
+    // this returns true for is guaranteed to show it.
+    function borrowPlan(card) {
+        const r = game.checkRequirements(0, card);
+        if (r.canPlay || r.mapFree) return null;
+        if (r.missingSpecial.length || !r.missingSkills.length) return null;
+        const lendable = game.getBorrowableSkills(0);
+        if (!r.missingSkills.every(s => lendable[s] && lendable[s].length)) return null;
+        const fee = r.missingSkills.length * 2;
+        if (game.players[0].gold < fee + (card.cost || 0)) return null;
+        return { missing: r.missingSkills, fee, lenders: lendable };
+    }
+    // The borrow lesson wants the SIMPLEST possible gap — ideally one missing
+    // skill on a Potion, so one stop teaches both (Wyatt: fewer stops in Act 2).
+    let borrowLesson = null;
+    function rigBorrowLesson() {
+        borrowLesson = null;
+        const card = rigBest(c => {
+            const plan = borrowPlan(c);
+            if (!plan) return null;
+            // Fewer missing skills is a cleaner lesson; a Potion doubles up.
+            return 100 - plan.missing.length * 10 + (c.type === 'potion' ? 5 : 0);
+        });
+        if (card) borrowLesson = Object.assign({ card }, borrowPlan(card));
+        return borrowLesson;
+    }
+    const SKILL_LABEL = s => s.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
+    // Name the seats that can actually lend the skills this lesson needs.
+    function lenderNames() {
+        if (!borrowLesson) return 'another heir';
+        const seats = new Set();
+        borrowLesson.missing.forEach(s => (borrowLesson.lenders[s] || []).forEach(i => seats.add(i)));
+        const names = [...seats].map(i => game.players[i].name);
+        return names.length ? names.join(' or ') : 'another heir';
     }
     // Make sure Helping the Merchant sits face-up in the mission pool, no matter
     // what — reclaim it from ANY deck or a rival who grabbed it, or clone it from
@@ -135,6 +215,11 @@
     }
     const heldMap = name => game.getPlayerMaps(0).includes(name);
     const you = () => game.players[0];
+    // The draft is over for this act — either a later phase has begun or the
+    // whole act has rolled over. Used instead of `phase === 'missions'`, which
+    // an act with no missions to resolve can pass through in a single tick.
+    const pastDraft = (act) => game.phase === 'missions' || game.phase === 'melee'
+        || game.phase === 'scoring' || game.currentAct !== act;
 
     // ── State probes the steps gate on ───────────────────────────────
     const panelActive = () => {
@@ -185,6 +270,7 @@
                 <div class="tut-text"></div>
                 <div class="tut-anatomy"></div>
                 <button class="btn-royal primary tut-next"><span>Next</span></button>
+                <div class="tut-choices"></div>
                 <div class="tut-count"></div>
             </div>
             <button id="tutSkip" title="Leave the tutorial">Skip tutorial ✕</button>`;
@@ -213,6 +299,35 @@
         if (tick) clearInterval(tick);
         try { window.CINEMATIC_SPEED = 1.0; } catch (e) {}
         location.assign('index.html');
+    }
+
+    // Drop the guide but KEEP PLAYING THIS GAME — offered at each Act boundary
+    // (Wyatt: "they have the basic tools now"). Unlike skip(), nothing is thrown
+    // away: the player's board, skills, gold, Prestige and missions carry on into
+    // a normal game from exactly where the tutorial left them.
+    //
+    // Every tutorial-only guard must come OFF here or the rest of the game plays
+    // by tutorial rules: TUT_ACTIVE makes the Melee wait for a tap that will
+    // never come (no bubble left to tap) and bars the rivals from claiming
+    // missions. Resolve any Melee gate still parked on a promise first.
+    function release() {
+        if (!active) return;
+        active = false;
+        if (tick) clearInterval(tick);
+        clearPulse();
+        tutMeleeGo();                  // free a pending splash, if any
+        window.TUT_ACTIVE = false;     // Melee auto-plays; rivals take missions again
+        window.__tutMeleeGate = null;
+        try { window.CINEMATIC_SPEED = 1.0; } catch (e) {}
+        window.removeEventListener('resize', layout);
+        if (root) root.remove();
+        try {
+            addLogEntry('═══ Tutorial dismissed — the game plays on ═══');
+            if (typeof showNotification === 'function') {
+                showNotification("You're on your own now — good luck.", 'act');
+            }
+            renderGameState();
+        } catch (e) { /* cosmetic only */ }
     }
 
     // Phone landscape runs the TABLE VIEW (tv-* ids); desktop runs .game-layout.
@@ -310,6 +425,27 @@
     // ── Step engine ──────────────────────────────────────────────────
     let pulseEl = null, clickArm = null, armed = true;
 
+    function skipStep(s) {
+        let skip;
+        try { skip = !!s.skipIf(); } catch (e) { return false; }   // on doubt, keep the step
+        // A skipped step may still owe the game something — the Melee beats hold
+        // the cinematic on a promise that only their Next resolves, so skipping
+        // one without releasing it would freeze the Melee forever.
+        if (skip && s.onSkip) { try { s.onSkip(); } catch (e) { console.warn('[TUT] onSkip failed:', s.id, e); } }
+        return skip;
+    }
+    // What the player has actually committed this turn — pendingActivations
+    // holds a single card most turns and an ARRAY on the last-two-cards turn.
+    // The Act 2 lessons check this before narrating: the hand is theirs to drag
+    // from, so a prompt that says "throw the Potion" can be answered with
+    // something else entirely, and the follow-up must not describe a card that
+    // isn't on the table.
+    function pendingCards(pi) {
+        const p = game.pendingActivations[pi];
+        return p == null ? [] : (Array.isArray(p) ? p : [p]);
+    }
+    const committed = (cardId) => pendingCards(0).some(c => c && c.id === cardId);
+
     function applyPulse(s) {
         if (!s.pulse) return;
         // Both layouts share class names (.hand-card, [data-act]) with one copy
@@ -323,12 +459,42 @@
         stepIdx = i;
         const s = STEPS[i];
         if (!s) return finish();
+        // A lesson that no longer applies steps aside rather than lying. From
+        // Act 2 the player picks their own cards, so a beat like "borrow the
+        // skill you lack" can be moot by the time we reach it.
+        //
+        // NOTE the ordering: for a ready-gated step this is checked when the
+        // gate FIRES, not now. A step queued during the Melee would otherwise
+        // test its condition against act-transition state — minutes of play
+        // before the moment it actually describes.
+        if (s.skipIf && !s.ready && skipStep(s)) return showStep(i + 1);
         if (s.before) { try { s.before(); } catch (e) { console.warn('[TUT] before failed:', s.id, e); } }
-        bubble.querySelector('.tut-title').textContent = s.title || '';
+        // title, like text, may be a function — the adaptive Act 2 lessons don't
+        // know which card they're teaching until they run.
+        bubble.querySelector('.tut-title').textContent =
+            (typeof s.title === 'function' ? s.title() : s.title) || '';
         const txt = typeof s.text === 'function' ? s.text() : s.text;
         bubble.querySelector('.tut-text').innerHTML = txt;
         bubble.querySelector('.tut-anatomy').innerHTML = s.anatomy || '';
-        bubble.querySelector('.tut-next').style.display = s.advance === 'next' ? '' : 'none';
+        // A choice step replaces Next with its own buttons (Act boundaries:
+        // carry on with the guide, or take the game solo from here).
+        const cw = bubble.querySelector('.tut-choices');
+        cw.innerHTML = '';
+        bubble.querySelector('.tut-next').style.display =
+            (s.advance === 'next' && !s.choices) ? '' : 'none';
+        if (s.choices) {
+            s.choices.forEach(c => {
+                const b = document.createElement('button');
+                b.className = 'btn-royal tut-choice' + (c.primary ? ' primary' : '');
+                b.innerHTML = `<span>${c.label}</span>`;
+                b.onclick = () => {
+                    if (c.onPick) { try { c.onPick(); } catch (e) { console.warn('[TUT] choice failed:', c.label, e); } }
+                    if (c.stop) return;      // released / left — no next step
+                    nextStep();
+                };
+                cw.appendChild(b);
+            });
+        }
         bubble.querySelector('.tut-count').textContent = `${i + 1} / ${STEPS.length}`;
         clearPulse();
 
@@ -348,6 +514,9 @@
                 try { r = s.ready(); } catch (e) { /* not yet */ }
                 if (r) {
                     clearInterval(gate);
+                    // The moment has arrived — NOW ask whether this lesson still
+                    // applies (see the note in showStep).
+                    if (s.skipIf && skipStep(s)) { showStep(STEPS.indexOf(s) + 1); return; }
                     if (s.onReady) { try { s.onReady(); } catch (e) { console.warn('[TUT] onReady failed:', s.id, e); } }
                     arm();
                 }
@@ -447,6 +616,46 @@
             <div class="aa-side right">${(o.right || []).map(t => `<span class="aa-lbl">${t}</span>`).join('')}</div>
         </div>${o.below ? `<div class="tut-anat-cap">${o.below}</div>` : ''}`;
 
+    // A turn the player owns outright (Acts 2 & 3). Wyatt: once the basics are
+    // taught, hand the wheel over — "give the player more control over what
+    // cards they can play, except for when the tutorial stuff pops up." So this
+    // is a WATCH step: no shield, no pulse, the hand fully live, just a corner
+    // bubble saying the table is theirs.
+    //
+    // Advancing keys off HAND SIZE, which drops by exactly one per draft turn
+    // (everyone commits a card, then the shortened hands rotate left) and never
+    // grows again inside an act. That matters: the obvious implementation —
+    // watch for a card to become pending, then for the reveal to finish —
+    // depends on a 300ms poll catching a transient state, and a player who
+    // throws their next card the instant the reveal ends slips straight through
+    // the gap. The step then sits on "your turn" for the whole act while every
+    // lesson queued behind it is silently lost. A monotonic quantity cannot be
+    // missed however fast they play.
+    //
+    // (`game.turnInAct` looks like the natural counter and is NOT: it is only
+    // bumped by nextActivation(), which this UI never calls — ui.js drives the
+    // draft itself through passHands(). It sits at 0 all game.)
+    function freeTurn(o) {
+        let handAtStart = 0, actAtStart = 0;
+        return Object.assign({
+            mode: 'watch',
+            ready: () => gameplayIdle(),
+            onReady: () => { handAtStart = you().hand.length; actAtStart = game.currentAct; },
+            advance: () => game.phase === 'missions' || game.phase === 'melee'
+                || game.currentAct !== actAtStart
+                || you().hand.length < handAtStart,
+            delay: 500,
+        }, o);
+    }
+
+    // The Act-boundary fork, offered at the end of Acts 1 and 2 (Wyatt): carry on
+    // with the guide, or take this same game solo from here. `stop: true` means
+    // the button does NOT advance the script — release() has torn it down.
+    const FORK = (nextLabel) => [
+        { label: nextLabel, primary: true },
+        { label: "I've got this — finish on my own", onPick: release, stop: true },
+    ];
+
     const STEPS = [
     // ══════════ OPENING — the table, the pieces, the goal ══════════
     {
@@ -538,7 +747,7 @@
         why: 'First real action — the commit gesture, done by the player, not a button.',
     },
     {
-        id: 'reveal-hunting', ready: () => panelActive(), target: '#actionPanel',
+        id: 'reveal-hunting', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
         advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
         title: 'Your Reveal — Play It',
         text: `Cards reveal in table order. This panel is your whole turn: <b>Play</b> it
@@ -574,7 +783,7 @@
         why: 'Introduces the Weapon type and the Melee it feeds, one Act before that Melee lands.',
     },
     {
-        id: 'weapon-play', ready: () => panelActive(), target: '#actionPanel',
+        id: 'weapon-play', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
         advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
         title: 'Bank the Power',
         text: `Play it — what you build now, you carry into the Melee. Your Power is climbing.`,
@@ -587,7 +796,15 @@
         // otherwise the detour lands mid-reveal and the board keeps blacking out
         // as the reveal re-renders (Wyatt). At idle nothing moves, so opening the
         // board is a real pause; closing it resumes with the next prompt.
-        id: 'board-tour', ready: () => gameplayIdle(), target: '#boardThumb', advance: 'click', delay: 800,
+        // Advances on the board actually BEING OPEN, not on the tap that opens
+        // it. With advance:'click' the tap fired the step forward on a timer
+        // while the next step ('slider') waited on #boardOverlay — so a player
+        // who opened and closed the board inside that window left the slider
+        // step waiting on an overlay that had already come and gone, with no way
+        // out but Skip. Gating on the state instead of the gesture can't desync:
+        // if they close it early, board-tour is simply still the live step.
+        id: 'board-tour', ready: () => gameplayIdle(), target: '#boardThumb',
+        advance: () => overlayActive('#boardOverlay'), delay: 0, tapTarget: true,
         title: 'Visit Your Board',
         text: `Quick detour — <b>tap your board</b> to see the ring up close. The table waits
                while you look.`,
@@ -596,7 +813,7 @@
     {
         // No shield (dimming would black out the board) + bubble pinned LEFT so the
         // board in the middle stays visible (Wyatt: prompt covered almost the board).
-        id: 'slider', ready: () => overlayActive('#boardOverlay'), target: '#boardOverlay',
+        id: 'slider', overlayGated: '#boardOverlay', target: '#boardOverlay',
         advance: () => !overlayActive('#boardOverlay'), noShield: true, bubbleSide: 'left',
         title: 'The Ring & the Slider',
         text: `Five slots. Your ring can slide for <b>5 Gold a space</b> (or free, when you
@@ -618,14 +835,14 @@
         why: 'Rigged so the Letter arrives exactly when the concept is fresh.',
     },
     {
-        id: 'mission-panel', ready: () => panelActive(), target: '#actionPanel',
-        advance: () => overlayActive('#missionSelect'), pulse: '#actionPanel [data-act="mission_letter"]',
+        id: 'mission-panel', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
+        advance: () => overlayActive('#missionSelect'), delay: 0, pulse: '#actionPanel [data-act="mission_letter"]',
         title: 'Send the Letter',
         text: `Pay the 1 Gold — then you'll choose from the three face-up missions.`,
         why: 'Bridges the letter to the pick; the real teaching is on the pick screen.',
     },
     {
-        id: 'mission-pick', ready: () => overlayActive('#missionSelect'),
+        id: 'mission-pick', overlayGated: '#missionSelect',
         target: () => {
             const img = document.querySelector('#missionSelect img[src*="Helping"]');
             return (img && (img.closest('.mission-option') || img.parentElement))
@@ -663,7 +880,7 @@
         why: 'Lands the third Survival so the mission visibly succeeds later; reinforces skills stacking toward a goal.',
     },
     {
-        id: 'build-play', ready: () => panelActive(), target: '#actionPanel',
+        id: 'build-play', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
         advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
         title: 'Play It',
         text: `Play it — that's <b>3 Survival</b> and <b>3 Power</b> banked. Your mission is
@@ -682,7 +899,7 @@
         why: 'Teaches the no-glow (grey) state on a genuinely unplayable card, setting up the discard economy.',
     },
     {
-        id: 'discard-panel', ready: () => panelActive(), target: '#actionPanel',
+        id: 'discard-panel', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
         advance: () => !panelActive(), pulse: '#actionPanel [data-act="discard"]',
         title: 'Discard = Gold or Movement',
         text: `Can't play it? Every card is still worth something: <b>+3 Gold</b>, or a free
@@ -692,11 +909,11 @@
 
     // ══════════ TURN 6 — THE LAST TWO ══════════
     {
-        id: 'final-turn', mode: 'watch',
+        id: 'final-turn', mode: 'watch', act: 1,
         // Wait until the Act truly ENDS (missions phase begins) — NOT the moment
         // the hand empties (that fires the instant you THROW your last two, before
         // you've revealed and played them). Wyatt saw this jump away too early.
-        advance: () => game.phase === 'missions',
+        advance: () => pastDraft(1),
         title: 'Play Out the Act',
         text: `Down to your last cards — when only two remain you play <b>both</b> at once.
                Commit them, then <b>reveal and play each one</b> as it comes up. That's the
@@ -706,7 +923,7 @@
 
     // ══════════ MISSIONS PHASE — hard-paced, narrated ══════════
     {
-        id: 'missions-phase', ready: () => game.phase === 'missions', mode: 'watch',
+        id: 'missions-phase', phaseGated: 'missions', act: 1, mode: 'watch',
         advance: () => game.phase === 'melee' || game.currentAct !== 1,
         title: 'The Missions Phase',
         text: `The Act is over — now every heir's mission resolves, one at a time, starting
@@ -722,8 +939,8 @@
         // The cinematic is HELD (showMeleeSplash awaits tutMeleeGate). This prompt
         // comes up over the table, you read it, hit Next → the Melee begins with no
         // tutorial overlay covering it (act1-done stays hidden until Act 2). Wyatt.
-        id: 'melee-phase', ready: () => game.phase === 'melee', advance: 'next',
-        onNext: () => tutMeleeGo(),
+        id: 'melee-phase', phaseGated: 'melee', act: 1, advance: 'next',
+        onNext: () => tutMeleeGo(), onSkip: () => tutMeleeGo(),
         title: 'THE MELEE',
         text: `The Act ends in the <b>Melee</b>: every heir's Power clashes head to head —
                weapons, board slots, everything counts (you can't borrow Power here — what
@@ -733,17 +950,300 @@
         why: 'Wyatt: the Melee prompt must appear FIRST, be read, and Next STARTS the cinematic (gated on tutMeleeGo). Then the tutorial hides (act1-done waits for Act 2) so nothing blocks the Melee.',
     },
 
-    // ══════════ SLICE END ══════════
+    // ══════════ ACT 1 → ACT 2 — the player's fork ══════════
     {
         // Hidden (armed=false) while the Melee cinematic plays — appears only once
         // the Melee is done and Act 2 begins, so it never covers the Melee.
-        id: 'act1-done', ready: () => game.currentAct >= 2, target: null, advance: 'next',
+        id: 'act1-done', ready: () => game.currentAct >= 2, target: null,
+        choices: FORK('Show me Act 2'),
         title: 'Act 1 Complete',
         text: `You've played the whole loop: read cards, built skills and Power, claimed and
-               resolved a mission, and fought the Melee. Acts 2 and 3 raise the stakes —
-               new card types, <b>Maps</b> that play cards for free, and the grand final
-               score. <b>That part is coming next.</b>`,
-        why: 'Closes the Act 1 slice; sets up Acts 2 & 3 (built next). Placeholder finale until the full game is scripted.',
+               resolved a mission, and fought the Melee. <b>That's the game.</b> Acts 2 and 3
+               play by the very same rules — just richer cards and bigger rewards.<br><br>
+               So it's your call: <b>carry on</b> and I'll point out each new thing as it
+               appears, or <b>take it from here yourself</b> — same game, same board, same
+               score, just without me.`,
+        why: "Wyatt: at the act break the player has the basic tools, so offer the exit. 'Finish on my own' calls release() — the tutorial tears down but THIS game continues live (TUT_ACTIVE cleared so the Melee stops waiting for taps and rivals resume claiming missions).",
+    },
+
+    // ══════════ ACT 2 — the stakes rise, and the wheel goes to the player ══════════
+    {
+        id: 'act2-open', target: null, advance: 'next',
+        title: 'Act 2 — Richer Cards, Bigger Melee',
+        text: `A fresh hand from the <b>Act 2 deck</b>: stronger cards, steeper costs. Two
+               things changed. The <b>Emblem passed one seat clockwise</b>, so you no longer
+               reveal first — watch where you fall in the order. And the Melee now pays
+               <b>15 / 5 / 3</b> instead of 5 / 3 / 1.<br><br>
+               From here <b>the turns are yours</b>. Play whatever you like — I'll only step
+               in when something genuinely new shows up.`,
+        why: "Sets Act 2's two real changes (Emblem rotation, richer Melee purse) and — Wyatt's ask — explicitly hands control over, so the free turns that follow read as designed rather than as the tutorial losing its grip.",
+    },
+
+    // ── The Map payoff: Act 1's mission reward pays here ──
+    {
+        // Helping the Merchant (Act 1) grants the map whose name IS "Helping the
+        // Merchant"; Great North Connection lists it in reqMaps, so holding it
+        // waives BOTH the requirement and the cost — checkRequirements returns
+        // mapFree and the hand renders it .freeplay (orange).
+        id: 'act2-map', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        onReady: () => rigTurn(['Great North Connection']),
+        advance: () => game.pendingActivations[0] !== null,
+        pulse: '.hand-card.freeplay',
+        title: 'Your Map Pays Off',
+        text: `Remember the <b>Map</b> that Helping the Merchant paid you? Here's what it
+               buys. <b>Great North Connection</b> normally demands 1 Charisma & 1 Power —
+               but your Map plays it <b>for free</b>: requirement waived, cost waived.<br><br>
+               That's what the <span class="tut-orange">orange</span> glow means, and it's
+               why missions are worth chasing: <b>green means you can afford it, orange
+               means you don't have to.</b> Throw it in.`,
+        why: "The whole Act 1 mission → Act 2 free play chain lands here — the single best argument for chasing missions. Teaches orange vs green as the affordable/free distinction.",
+    },
+    {
+        id: 'act2-map-play', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
+        // The hand is draggable even under the shield, so honour what they
+        // actually threw: if it isn't the Map card, skip rather than describe
+        // rewards that aren't coming.
+        skipIf: () => !pendingCards(0).some(c => c.name === 'Great North Connection'),
+        advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
+        title: 'Free, and It Keeps Giving',
+        text: `Play it. Three things land at once: <b>5 Favor</b> straight to your score, a
+               <b>Trade Route</b> — from now on you may borrow Survival, Charisma, Alchemy
+               and Prospecting from <b>any player at the table</b>, not just the two beside
+               you — and <b>another Map</b>, for an Act 3 card. Maps chain into Maps.`,
+        why: 'Names all three payoffs honestly (favor 5, special trade_route, grantsMap Market Trade Exchange) and plants the borrowing widening that the very next lesson uses.',
+    },
+
+    // ── A turn that's purely theirs ──
+    freeTurn({
+        id: 'act2-free-1',
+        title: 'Your Table Now',
+        text: `Your turn — <b>play whatever you like</b>. Green cards you can afford, orange
+               plays free, and anything you can't use is still <b>+3 Gold or a ring slide</b>.
+               There's no wrong move here.`,
+        why: "Wyatt: more player control in Acts 2 & 3. A watch step — no shield, no pulse, hand fully live — that just waits for them to take a whole turn.",
+    }),
+
+    // ── BORROWING (Wyatt: must be introduced AND demonstrated in Act 2) ──
+    {
+        // Rigged ADAPTIVELY, not by name: after a free turn we can't know what
+        // the player built, so pick whatever card the table can actually teach
+        // borrowing with right now — preferring a Potion so one stop covers both.
+        id: 'act2-borrow-throw', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        // skipIf runs when the gate fires, so the rig happens against the state
+        // the player actually arrives in — and doubles as the "is there a borrow
+        // lesson to teach at all?" test. onReady would be redundant after it.
+        skipIf: () => !rigBorrowLesson(),
+        advance: () => game.pendingActivations[0] !== null,
+        pulse: '.hand-card',
+        title: () => borrowLesson && borrowLesson.card.type === 'potion'
+            ? 'Your First Potion — and You Can\'t Afford It'
+            : "A Card You Can't Afford",
+        text: () => {
+            if (!borrowLesson) return '';
+            const c = borrowLesson.card;
+            const need = borrowLesson.missing.map(SKILL_LABEL).join(' & ');
+            const potion = c.type === 'potion'
+                ? `<b>${c.name}</b> is a <b>Potion</b> — potions fire <b>once, instantly</b>,
+                   the moment you play them. No lasting skills, no Power for the Melee; just
+                   one sharp effect exactly when you need it. `
+                : `<b>${c.name}</b> is worth having. `;
+            return `${potion}But look — <b>no green glow</b>. You're short
+                   <b>${need}</b>.<br><br>
+                   In Act 1 that meant discarding it for Gold. Not any more:
+                   <b>you can borrow what you lack</b>. Throw it in and I'll show you.`;
+        },
+        why: "Wyatt's explicit Act 2 requirement. The card is chosen against LIVE state by borrowPlan() — mirroring the exact conditions ui.js uses to offer the Borrow button — so the lesson survives whatever the player did on their free turn. Prefers a Potion so the potion type gets taught in the same stop.",
+    },
+    {
+        id: 'act2-borrow-panel', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
+        skipIf: () => !borrowLesson || !committed(borrowLesson.card.id),
+        advance: () => !panelActive(), delay: 0, pulse: '#actionPanel [data-act="borrow_play"]',
+        title: 'Borrow It',
+        text: () => {
+            if (!borrowLesson) return '';
+            const need = borrowLesson.missing.map(SKILL_LABEL).join(' & ');
+            return `The top button is dead — it just tells you what's missing. Underneath it,
+                   though: <b>Borrow &amp; Play</b>. Other heirs' played skills are for hire.
+                   <b>${borrowLesson.fee} Gold</b> covers the ${need} you need — and that gold
+                   goes <b>to the lender</b>, not the bank. Borrowing is a favour someone
+                   profits from.<br><br>
+                   You can borrow for cards and for missions — but <b>never for the Melee</b>,
+                   and never for a Mind's Eye or a Philosopher's Stone. Hit
+                   <b>Borrow &amp; Play</b>.`;
+        },
+        why: 'The gold-to-the-lender detail is the part players miss — it reframes borrowing as a deal, not a fee. Names the two hard limits (Melee, elite resources) right where they matter.',
+    },
+    {
+        // The lender chooser (#promisePicker) takes the screen — no shield, and
+        // the bubble pinned aside so the seats stay readable.
+        // Waiting ONLY on the picker would hang forever if the player took the
+        // Discard instead — so the gate also opens when the turn simply resolves,
+        // and skipIf then reads which of the two happened.
+        id: 'act2-borrow-pick', overlayGated: '#promisePicker',
+        noShield: true, bubbleSide: 'left',
+        advance: () => !overlayActive('#promisePicker'), delay: 400,
+        title: 'Who Lends It?',
+        text: () => `Pick your lender. ${lenderNames()} can cover it — and thanks to that
+                    Trade Route you just played, the whole table is open to you for
+                    Survival, Charisma, Alchemy and Prospecting, not only your neighbours.
+                    Choose, and the card plays.`,
+        why: 'The chooser is a genuinely new overlay, so it gets its own beat — and it pays off the Trade Route from two steps earlier. Side-pinned like the Act 1 slider/mission fixes so it never covers the seats.',
+    },
+
+    freeTurn({
+        id: 'act2-free-2',
+        title: 'Carry On',
+        text: `Another one that's all yours. Remember you can <b>borrow</b> now whenever a
+               card is just out of reach — check the second button before you settle for
+               the Gold.`,
+        why: 'Free turn that also nudges them to USE the thing just taught — the lesson only sticks if they reach for it unprompted.',
+    }),
+
+    // ── The elite gates: Mind's Eye & the Philosopher's Stone ──
+    {
+        // Watch mode: the hand stays live so they can turn the card over while
+        // they read. Explain-on-sight — the design brief only makes 5 of the 7
+        // types hands-on, and these two are gates, not plays.
+        id: 'act2-elite', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
+        onReady: () => rigTurn(["Mind's Eye"]),
+        title: "Wisdom: The Two Keys",
+        text: `That's a <b>Wisdom</b> card at the front of your hand — <b>Mind's Eye</b>.
+               Wisdom cards carry the two treasures the whole late game is built around:
+               the <b>Mind's Eye</b> and the <b>Philosopher's Stone</b>.<br><br>
+               They are not skills. <b>They cannot be borrowed</b> — no amount of Gold buys
+               one off a neighbour. If a card demands a Mind's Eye and you haven't got one,
+               that card is simply shut to you. Earning one early is what opens Act 3's
+               biggest scores.`,
+        anatomy: () => AN("assets/cards/regular/Mind_s Eye Card.jpg", {
+            left: ['⬅ <b>Its own cost:</b> 1 Alchemy, 1 Prospecting, 1 Knowledge — spread across three skills, which is what makes it hard.'],
+            right: ['<b>What it grants ➡</b> 1 Alchemy, and the <b>Mind\'s Eye</b> itself — a treasure you keep, not a skill.'],
+            below: `Its twin, the <b>Philosopher's Stone</b>, works the same way from the other side: 1 Knowledge, 1 Prospecting, 1 Alchemy to earn, and it grants the Stone. Neither can ever be borrowed.`,
+        }),
+        why: "Rulebook: Mind's Eye / Philosopher's Stone are elite gate resources that can NEVER be borrowed — the one hard wall in a game where everything else is for hire. Taught right after borrowing so the exception lands against the rule.",
+    },
+    {
+        id: 'act2-artifact', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
+        onReady: () => rigTurn(['Lost South Map']),
+        title: 'Artifacts — Pure Favor',
+        text: `And here's what those keys unlock. <b>Lost South Map</b> is an <b>Artifact</b>:
+               artifacts do nothing during play — no skills, no Power — they are simply
+               <b>Favor banked for the final count</b>. This one wants 1 Survival, 1 Charisma
+               and <b>1 Mind's Eye</b>.<br><br>
+               See how it fits together? The gate card buys the treasure, the treasure opens
+               the Artifact, the Artifact pays the score. And if you also hold its northern
+               twin, this one pays <b>20 Prestige</b> on top.`,
+        anatomy: () => AN('assets/cards/regular/Lost South Map.jpg', {
+            left: ['⬅ <b>Requires</b> 1 Survival, 1 Charisma and 1 <b>Mind\'s Eye</b> — the Mind\'s Eye is the part you cannot borrow.'],
+            right: ['<b>Pays ➡</b> 5 Favor on the blue shield, straight to your final score — plus 20 Prestige if you also hold the Lost North Map.'],
+            below: `Artifacts are the quietest cards in the game: nothing happens when you play them, and then they decide the crown.`,
+        }),
+        why: "Completes the seven card types on sight (Artifact was the last unseen) and shows the Mind's Eye gate paying off concretely rather than abstractly. Both Act 2 artifacts genuinely require a Mind's Eye, so the chain is real, not illustrative.",
+    },
+
+    // ── The rest of the act belongs to the player ──
+    {
+        id: 'act2-rest', ready: () => gameplayIdle(), mode: 'watch',
+        advance: () => pastDraft(2),
+        title: 'Play Out the Act',
+        text: `The rest of Act 2 is yours — <b>every turn, your call</b>. Build toward a
+               Mind's Eye, stack Power for the bigger Melee, chase a mission, or bank Gold.
+               Play the act out and I'll meet you at the missions.`,
+        why: 'One watch step spanning every remaining turn rather than a prompt per turn — Wyatt wants Acts 2 & 3 to hand over control, and there is nothing new left to teach this act.',
+    },
+
+    // ══════════ ACT 2 MISSIONS + MELEE ══════════
+    {
+        id: 'act2-missions', phaseGated: 'missions', act: 2, mode: 'watch',
+        advance: () => game.phase === 'melee' || game.currentAct !== 2,
+        title: 'Missions Resolve Again',
+        text: `Same ceremony as Act 1 — <b>tap each card</b> to resolve it. One difference
+               worth knowing: if you're short on a mission requirement, <b>you may borrow
+               to complete it</b>, exactly as you did for that card. A mission you can't
+               quite reach is often still worth buying your way into.`,
+        why: 'Adds the one genuinely new mission-phase rule (borrowing at resolution, rulebook p.14) without re-teaching the ceremony they already watched.',
+    },
+    {
+        id: 'act2-melee', phaseGated: 'melee', act: 2, advance: 'next',
+        onNext: () => tutMeleeGo(), onSkip: () => tutMeleeGo(),
+        title: 'The Melee — Triple the Purse',
+        text: `Power on the table again — but the podium now pays <b>15 / 5 / 3</b>. Act 1's
+               whole first prize is barely Act 2's third. And remember: <b>no borrowing
+               here.</b> Whatever Power you actually built is what you bring.<br><br>
+               <b>Hit Next to watch it unfold.</b>`,
+        why: 'Same gate mechanism as Act 1 (showMeleeSplash awaits tutMeleeGo) — the prompt is read first, then Next starts the cinematic unobstructed. The escalating purse is the reason to invest in Power now.',
+    },
+
+    // ══════════ ACT 2 → ACT 3 — the fork again ══════════
+    {
+        id: 'act2-done', ready: () => game.currentAct >= 3 || game.phase === 'scoring',
+        target: null, choices: FORK('One more Act'),
+        title: 'Act 2 Complete',
+        text: `Maps, borrowing, potions, artifacts and the two keys — <b>you've now seen every
+               moving part of FAVOR</b>. Act 3 introduces no new rules at all: the cards are
+               simply the biggest in the game, and the Melee pays <b>30 / 15 / 5</b>.<br><br>
+               Stay with me and I'll walk you to the final score, or take the last Act
+               yourself.`,
+        why: "Second fork, same contract as the first. Honest framing: Act 3 really does add no new mechanics (verified against data — act 3 cards are the same seven types at higher requirements), so 'you've seen everything' is true and the exit is a fair offer rather than a bail-out.",
+    },
+
+    // ══════════ ACT 3 — no new rules, so almost no interruptions ══════════
+    {
+        id: 'act3-open', ready: () => game.currentAct >= 3, target: null, advance: 'next',
+        title: 'Act 3 — The Last Word',
+        text: `Final Act. Everything on the table now is the top end of the deck: the
+               Adventures that pay in double figures, the Artifacts, the cards your Maps
+               and your Mind's Eye were always for. Spend it all — <b>nothing you're
+               holding at the end is worth anything.</b><br><br>
+               <b>Every turn from here is yours.</b> I'll speak up twice more: once for the
+               last Melee, and once for the score.`,
+        why: 'Sets the one strategic truth that changes in Act 3 (hoarding is now pure loss) and states exactly how often the tutorial will interrupt, so the silence that follows reads as intentional.',
+    },
+    {
+        id: 'act3-play', ready: () => gameplayIdle(), mode: 'watch',
+        advance: () => pastDraft(3),
+        title: 'The Last Act Is Yours',
+        text: `Play it out — every card, every choice. Cash your Maps, borrow what you're
+               short, and pile on Power: this Melee is worth more than both the others
+               together.`,
+        why: 'One watch step across the entire Act 3 draft. Nothing new to teach, and Wyatt wants the player driving by now.',
+    },
+    {
+        id: 'act3-missions', phaseGated: 'missions', act: 3, mode: 'watch',
+        advance: () => game.phase === 'melee' || game.phase === 'scoring',
+        title: 'The Final Missions',
+        text: `Last chance on every mission you're holding — <b>tap each to resolve it</b>.
+               Borrow now if it closes a requirement; there is no later to save the gold for.`,
+        why: "Reinforces borrow-at-resolution at the only moment it's unambiguously correct — the last act, where saved gold is worth nothing but a tiebreak.",
+    },
+    {
+        id: 'act3-melee', phaseGated: 'melee', act: 3, advance: 'next',
+        onNext: () => tutMeleeGo(), onSkip: () => tutMeleeGo(),
+        title: 'The Last Melee — 30 / 15 / 5',
+        text: `Everything you built comes to the field one final time, and the podium pays
+               <b>30 / 15 / 5</b>. This single clash is worth more Prestige than Acts 1 and
+               2 combined — which is why Power is never a wasted play.<br><br>
+               <b>Hit Next.</b>`,
+        why: 'Same gate as the earlier Melees. The 30/15/5 purse retroactively justifies every Weapon they played, which is the note to end the play on.',
+    },
+    {
+        // The score sheet takes the whole screen — corner bubble, nothing dimmed.
+        id: 'final-scoring', ready: () => overlayActive('#scoring-screen'),
+        mode: 'watch',
+        // NOT the blanket finale — that would dim the very sheet this step is
+        // asking them to read. Both buttons end the tutorial cleanly instead.
+        choices: [
+            { label: 'Let me read it', onPick: release, stop: true },
+            { label: 'Play the real thing', primary: true, stop: true,
+              onPick: () => { release(); location.assign('index.html'); } },
+        ],
+        title: 'How the Crown Is Won',
+        text: `Here is the whole game in six lines. <b>Missions</b>, <b>Adventures</b>,
+               <b>Artifacts</b> and your <b>Character</b> board add up to your Favor.
+               <b>Prestige</b> — everything the Melees paid — adds on top. <b>Scorn</b>
+               comes straight back off.<br><br>
+               <b>Favor + Prestige − Scorn</b> is your score, and the richer heir takes any
+               tie. Every row opens if you tap it: that's where each point came from.`,
+        why: 'Matches the real sheet exactly (SHEET_ROWS = Missions/Adventures/Artifacts/Character/Prestige/Scorn; finalScore = totalFavor + prestige − scorn; gold breaks ties) and points out the drill-down rows, which players otherwise never discover.',
     },
     ];
 
@@ -753,6 +1253,50 @@
             const fn = s.anatomy;
             Object.defineProperty(s, 'anatomy', { get: fn });
         }
+    });
+
+    // Every step that narrates the action panel shares one hazard, so it is
+    // closed in one place rather than seven. showStep runs a beat AFTER the
+    // throw that opens the panel, and its gate then polls at 250ms — so a
+    // player who taps Play the instant the panel appears can answer it before
+    // the prompt ever lands. `ready: panelActive()` would then wait forever on
+    // a panel that has already gone, with no way out but Skip.
+    //
+    // Widening the gate to "panel is up OR the turn has moved on" makes that
+    // impossible: the fallback cannot fire early (right after a throw
+    // pendingActivations[0] is set, so gameplayIdle() is false), and when it
+    // does fire, skipIf drops the step instead of narrating a panel that isn't
+    // there. Same shape as the board-tour fix — gate on state, never on a
+    // gesture that may already have happened.
+    //
+    // `overlayGated: '<selector>'` is the same guarantee for the steps that
+    // narrate a chooser (the board, the mission picker, the lender picker):
+    // those can likewise be answered inside the beat between the overlay
+    // opening and the prompt arriving.
+    STEPS.forEach(s => {
+        const sel = s.panelGated ? null : s.overlayGated;
+        if (!s.panelGated && !sel) return;
+        const isUp = sel ? () => overlayActive(sel) : panelActive;
+        const origSkip = s.skipIf;
+        s.ready = () => isUp() || gameplayIdle() || game.phase === 'missions';
+        s.skipIf = () => !isUp() || (origSkip ? origSkip() : false);
+    });
+
+    // `phaseGated: 'missions'|'melee'` + `act: N` — the same guarantee for the
+    // end-of-act beats. An act in which the player claimed no mission resolves
+    // its missions phase in a single tick, so `ready: phase === 'missions'`
+    // could be looking at 'melee' by its first poll and then wait forever for a
+    // phase that had already been and gone. Arming on "that phase, or anything
+    // after it" makes the gate unmissable; skipIf drops the narration when the
+    // beat it describes never really happened.
+    const PHASE_RANK = { gameplay: 0, activate: 0, missions: 1, melee: 2, scoring: 3 };
+    STEPS.forEach(s => {
+        if (!s.phaseGated) return;
+        const want = s.phaseGated, act = s.act;
+        const origSkip = s.skipIf;
+        s.ready = () => game.currentAct > act
+            || (PHASE_RANK[game.phase] || 0) >= PHASE_RANK[want];
+        s.skipIf = () => game.phase !== want || (origSkip ? origSkip() : false);
     });
 
     // ── Boot ─────────────────────────────────────────────────────────
@@ -802,7 +1346,22 @@
         if (i >= 0) showStep(i);
         return i;
     }
-    window.TUT = { start, steps: STEPS, goto };
+    // cur() — which step is on screen, and is it actually showing yet (a
+    // ready-gated step sits armed=false and invisible while it waits). The test
+    // harness needs both: it must not act on a step that hasn't armed.
+    const cur = () => {
+        const s = STEPS[stepIdx];
+        return s ? {
+            id: s.id, i: stepIdx, armed, mode: s.mode || 'shield',
+            // This step advances by tapping its spotlit element and nothing else
+            // — no Next, and not always a pulse. Surfaced so a harness can drive
+            // it the way a player does. (`tapTarget` covers the steps that wait
+            // on what the tap OPENS rather than on the tap itself.)
+            needsClick: s.advance === 'click' || !!s.tapTarget,
+            target: typeof s.target === 'string' ? s.target : null,
+        } : null;
+    };
+    window.TUT = { start, steps: STEPS, goto, cur, release };
 
     // Auto-start on the standalone howto page.
     if (/[?&]tutorial=1/.test(location.search) || window.TUTORIAL_AUTOSTART) {

@@ -32,6 +32,14 @@
 .tut-title { font-family: 'Cinzel', serif; font-size: 18px; font-weight: 800; color: #e9d48b; margin: 3px 0 6px; }
 .tut-text b { color: #ffe9a8; }
 .tut-next { margin-top: 10px; }
+/* Act-boundary fork: carry on with the guide, or take the game solo. Stacked
+   so the secondary choice reads as a real option rather than a cancel link —
+   the player is meant to weigh them, not skim past one. */
+.tut-choices { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; }
+.tut-choices:empty { display: none; }
+.tut-choice { width: 100%; }
+.tut-choice:not(.primary) { opacity: 0.9; }
+.tut-choice:not(.primary) span { font-size: 13px; }
 .tut-count { font-size: 11px; color: rgba(240, 230, 211, 0.45); margin-top: 8px; text-align: right; font-family: 'Cinzel', serif; }
 .tut-green { color: #8ce17d; font-weight: 700; }
 .tut-orange { color: #ff9d3c; font-weight: 700; }
@@ -130,6 +138,10 @@
     .tut-title { font-size: 15px; margin: 2px 0 4px; }
     .tut-next { margin-top: 7px; padding: 8px 14px; }
     .tut-next span { font-size: 13px; }
+    .tut-choices { gap: 5px; margin-top: 8px; }
+    .tut-choice { padding: 7px 12px; }
+    .tut-choice span { font-size: 12.5px; }
+    .tut-choice:not(.primary) span { font-size: 11.5px; }
     .tut-count { margin-top: 5px; }
     /* Anatomy: smaller card + labels so the whole thing fits a short screen */
     .tut-anat2 { gap: 6px; margin: 8px auto 3px; }
