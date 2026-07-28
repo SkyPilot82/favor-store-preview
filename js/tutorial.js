@@ -174,6 +174,56 @@
         if (card) borrowLesson = Object.assign({ card }, borrowPlan(card));
         return borrowLesson;
     }
+    // ── Act 3 lesson pickers ─────────────────────────────────────────
+    // A card a held Map plays for free. By Act 3 the player may be holding
+    // several maps, so this asks the engine which card is actually free right
+    // now rather than naming one — but prefers Market Trade Exchange, the card
+    // the tutorial's own Act 1 → Act 2 → Act 3 chain was built to reach.
+    let mapLesson = null;
+    function rigMapFree() {
+        mapLesson = rigBest(c => {
+            let r;
+            try { r = game.checkRequirements(0, c); } catch (e) { return null; }
+            if (!r.mapFree) return null;
+            return c.name === 'Market Trade Exchange' ? 100 : 50;
+        });
+        return mapLesson;
+    }
+    // Which of the player's maps opened it — for the copy, so the payoff is
+    // traced back to the mission or card that earned it.
+    const unlockingMap = (card) =>
+        (card && card.reqMaps || []).find(m => heldMap(m)) || null;
+
+    // Act 3's artifacts are the real novelty: Act 2's paid a flat number, these
+    // pay a FORMULA off everything the player has built. Prefer one they can
+    // actually play so the lesson can be acted on, not just admired.
+    const FORMULA_TEXT = {
+        favor_per_knowledge_x2: 'two Favor for every Knowledge you hold',
+        favor_per_quest_x5: 'five Favor for every mission you completed',
+        favor_per_sur_cha_pro: 'one Favor for every Survival, Charisma and Prospecting you hold',
+        favor_per_artifact_x8: 'eight Favor for every Artifact you have played',
+        favor_per_potion_x5: 'five Favor for every Potion you have played',
+        favor_per_neighbor_power: 'one Favor for every point of Power your two neighbours hold',
+    };
+    let artifactLesson = null;
+    function rigFormulaArtifact() {
+        artifactLesson = rigBest(c => {
+            if (c.type !== 'artifact' || !FORMULA_TEXT[c.special]) return null;
+            let can = false;
+            try { can = !!game.checkRequirements(0, c).canPlay; } catch (e) {}
+            return can ? 100 : 50;
+        });
+        return artifactLesson;
+    }
+    // The Chemicals — the only cards that reach across the table and touch the
+    // other heirs' scores.
+    let chemLesson = null;
+    function rigChemical() {
+        chemLesson = rigBest(c => !/^Chemical /.test(c.name) ? null
+            : (c.name === 'Chemical X' ? 100 : 60));
+        return chemLesson;
+    }
+
     const SKILL_LABEL = s => s.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
     // Name the seats that can actually lend the skills this lesson needs.
     function lenderNames() {
@@ -214,12 +264,71 @@
         }
     }
     const heldMap = name => game.getPlayerMaps(0).includes(name);
+    // The card a name-rigged lesson is pointing at. rigTurn moves it to the
+    // FRONT of the hand, so the first match is the one being taught.
+    const inHand = name => game.players[0].hand.find(c => c.name === name) || null;
     const you = () => game.players[0];
     // The draft is over for this act — either a later phase has begun or the
     // whole act has rolled over. Used instead of `phase === 'missions'`, which
     // an act with no missions to resolve can pass through in a single tick.
     const pastDraft = (act) => game.phase === 'missions' || game.phase === 'melee'
         || game.phase === 'scoring' || game.currentAct !== act;
+
+    // ── Lesson-card lock ─────────────────────────────────────────────
+    // Wyatt: when a step points at a card, that card is the ONLY one the player
+    // may play. Enforced in two places deliberately — the class is the
+    // affordance (the rest of the hand greys out and stops taking pointers),
+    // the wrapper around ui.js's global throwCard is the guarantee. The class
+    // alone is not enough: the hand re-renders on every state change, so
+    // anything painted on can be wiped between one render and the next, and
+    // both drag paths (_handDragEnd / _deskDragEnd) end in a bare throwCard(i)
+    // that would sail straight through.
+    let lockedCardId = null, origThrowCard = null;
+
+    function lockCardTo(card) { lockedCardId = card ? card.id : null; applyCardLock(); }
+    function clearCardLock() { lockedCardId = null; applyCardLock(); }
+
+    function applyCardLock() {
+        const hand = (game && game.players && game.players[0]) ? game.players[0].hand : [];
+        document.querySelectorAll('.hand-card').forEach(el => {
+            const i = parseInt(el.getAttribute('data-hand-i'), 10);
+            const c = isNaN(i) ? null : hand[i];
+            el.classList.toggle('tut-locked',
+                lockedCardId != null && (!c || c.id !== lockedCardId));
+        });
+    }
+
+    // A top-level `function throwCard()` in a classic script is a writable
+    // property of the global object, so replacing it re-points the bare calls
+    // inside ui.js's drag handlers too. Restored by release().
+    function installThrowGuard() {
+        if (typeof window.throwCard !== 'function' || window.throwCard.__tutGuarded) return;
+        origThrowCard = window.throwCard;
+        const guarded = function (index) {
+            if (active && lockedCardId != null) {
+                const c = game.players[0].hand[index];
+                if (!c || c.id !== lockedCardId) {
+                    // Not the card the lesson is pointing at — refuse, and make
+                    // the right one unmistakable rather than failing silently.
+                    if (pulseEl) {
+                        pulseEl.classList.remove('tut-pulse');
+                        void pulseEl.offsetWidth;              // restart the animation
+                        pulseEl.classList.add('tut-pulse');
+                    }
+                    return;
+                }
+            }
+            return origThrowCard.apply(this, arguments);
+        };
+        guarded.__tutGuarded = true;
+        window.throwCard = guarded;
+    }
+    function removeThrowGuard() {
+        if (origThrowCard && window.throwCard && window.throwCard.__tutGuarded) {
+            window.throwCard = origThrowCard;
+        }
+        origThrowCard = null;
+    }
 
     // ── State probes the steps gate on ───────────────────────────────
     const panelActive = () => {
@@ -315,6 +424,7 @@
         active = false;
         if (tick) clearInterval(tick);
         clearPulse();
+        removeThrowGuard();            // ui.js gets its own throwCard back
         tutMeleeGo();                  // free a pending splash, if any
         window.TUT_ACTIVE = false;     // Melee auto-plays; rivals take missions again
         window.__tutMeleeGate = null;
@@ -499,7 +609,15 @@
         clearPulse();
 
         // Show the shield+bubble+pulse and start listening for advance.
-        const arm = () => { armed = true; applyPulse(s); layout(); armAdvance(s); };
+        const arm = () => {
+            armed = true;
+            // Lock the hand to this lesson's card BEFORE the pulse, so the
+            // greying-out and the glow appear in the same frame.
+            if (s.lockCard) { try { lockCardTo(s.lockCard()); } catch (e) { clearCardLock(); } }
+            applyPulse(s);
+            layout();
+            armAdvance(s);
+        };
 
         // Edge-trigger guard: a step that reacts to state X must not arm
         // until X has actually ARRIVED — otherwise a stale "not X yet"
@@ -529,6 +647,22 @@
     function clearPulse() {
         if (pulseEl) { pulseEl.classList.remove('tut-pulse', 'tut-pulse-green'); pulseEl = null; }
         if (clickArm) { document.removeEventListener('click', clickArm, true); clickArm = null; }
+        clearCardLock();
+    }
+
+    // The hand rebuilds its elements on every renderGameState, which throws away
+    // the glow and the lock along with the old nodes. The layout tick re-asserts
+    // both whenever the element we marked is no longer in the document — so a
+    // rival's play mid-step can't quietly unlock the hand or drop the pulse.
+    function reassertMarks() {
+        const s = STEPS[stepIdx];
+        if (!s || !armed) return;
+        if (lockedCardId != null) applyCardLock();
+        if (s.pulse && (!pulseEl || !document.contains(pulseEl))) {
+            if (pulseEl) pulseEl.classList.remove('tut-pulse', 'tut-pulse-green');
+            pulseEl = null;
+            applyPulse(s);
+        }
     }
 
     function armAdvance(s) {
@@ -741,6 +875,7 @@
     },
     {
         id: 'throw-hunting', target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
+        lockCard: () => inHand('Hunting'),
         pulse: '.hand-card.playable', pulseCls: 'tut-pulse-green',
         title: 'Throw Your First Card',
         text: `Drag <b>Hunting</b> up toward the table to commit it, face-down.`,
@@ -772,7 +907,7 @@
 
     // ══════════ TURN 2 — WEAPON (Power feeds the Melee) ══════════
     {
-        id: 'weapon-turn', ready: () => gameplayIdle(), target: '#handZone',
+        id: 'weapon-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Shark Tooth'),
         onReady: () => rigTurn(['Shark Tooth']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'A Weapon — Power for the Melee',
@@ -826,7 +961,7 @@
 
     // ══════════ TURN 3 — MISSION LETTER (claim a mission) ══════════
     {
-        id: 'mission-turn', ready: () => gameplayIdle(), target: '#handZone',
+        id: 'mission-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Mission Letter'),
         onReady: () => { rigTurn(['Mission Letter']); rigMissions(); },
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'The Mission Letter',
@@ -871,7 +1006,7 @@
 
     // ══════════ TURN 4 — ENDEAVOR (finish the mission requirement) ══════════
     {
-        id: 'build-turn', ready: () => gameplayIdle(), target: '#handZone',
+        id: 'build-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('First Aid'),
         onReady: () => rigTurn(['First Aid']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'Keep Building',
@@ -890,7 +1025,7 @@
 
     // ══════════ TURN 5 — DISCARD (the bad-hand economy; Borrow waits for Act 2) ══════════
     {
-        id: 'discard-turn', ready: () => gameplayIdle(), target: '#handZone',
+        id: 'discard-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Cooking'),
         onReady: () => rigTurn(['Cooking']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'Not Every Card Is For You',
@@ -986,6 +1121,7 @@
         // waives BOTH the requirement and the cost — checkRequirements returns
         // mapFree and the hand renders it .freeplay (orange).
         id: 'act2-map', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        lockCard: () => inHand('Great North Connection'),
         onReady: () => rigTurn(['Great North Connection']),
         advance: () => game.pendingActivations[0] !== null,
         pulse: '.hand-card.freeplay',
@@ -1029,6 +1165,7 @@
         // the player built, so pick whatever card the table can actually teach
         // borrowing with right now — preferring a Potion so one stop covers both.
         id: 'act2-borrow-throw', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        lockCard: () => (borrowLesson ? borrowLesson.card : null),
         // skipIf runs when the gate fires, so the rig happens against the state
         // the player actually arrives in — and doubles as the "is there a borrow
         // lesson to teach at all?" test. onReady would be redundant after it.
@@ -1194,18 +1331,124 @@
                Adventures that pay in double figures, the Artifacts, the cards your Maps
                and your Mind's Eye were always for. Spend it all — <b>nothing you're
                holding at the end is worth anything.</b><br><br>
-               <b>Every turn from here is yours.</b> I'll speak up twice more: once for the
-               last Melee, and once for the score.`,
-        why: 'Sets the one strategic truth that changes in Act 3 (hoarding is now pure loss) and states exactly how often the tutorial will interrupt, so the silence that follows reads as intentional.',
+               There are <b>no new rules left</b> — but there are three things this Act does
+               that no other Act can, and I'll stop for each.`,
+        why: 'Sets the one strategic truth that changes in Act 3 (hoarding is now pure loss) and promises exactly three stops, so the free turns between them read as intentional.',
     },
+
+    // ── The Map chain completes: Act 1's mission is still paying ──
+    {
+        // Great North Connection (played in Act 2) grants the "Great North
+        // Connection" map, which is exactly Market Trade Exchange's reqMaps —
+        // so the chain that began with an Act 1 mission pays a THIRD time.
+        // Rigged adaptively: by Act 3 the player may hold several maps, so ask
+        // the engine which card is genuinely free rather than naming one.
+        id: 'act3-map', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        skipIf: () => !rigMapFree(),
+        lockCard: () => mapLesson,
+        advance: () => game.pendingActivations[0] !== null,
+        pulse: '.hand-card.freeplay',
+        title: 'The Chain Pays a Third Time',
+        text: () => {
+            if (!mapLesson) return '';
+            const via = unlockingMap(mapLesson);
+            const chain = via === 'Great North Connection'
+                ? `A mission you claimed in <b>Act 1</b> paid a Map. That Map played
+                   <b>Great North Connection</b> free in Act 2 — and Great North Connection
+                   paid <b>another</b> Map, which is why `
+                : `Your <b>${via}</b> Map is why `;
+            return `${chain}<b>${mapLesson.name}</b> is glowing
+                   <span class="tut-orange">orange</span> right now.<br><br>
+                   It would normally cost you real skills and real Gold. It costs you
+                   <b>nothing</b>. That is the whole argument for chasing missions: one
+                   mission in Act 1 has now paid you three times, and the last payment is
+                   the biggest. Throw it in.`;
+        },
+        why: "The Act 1 → Act 2 → Act 3 map chain closing is the most satisfying thing in the data, and nothing else in the game demonstrates compounding this clearly. Adaptive so it still works if the player holds a different map instead.",
+    },
+    {
+        id: 'act3-map-play', panelGated: true, ready: () => panelActive(), target: '#actionPanel',
+        skipIf: () => !mapLesson || !committed(mapLesson.id),
+        advance: () => !panelActive(), pulse: '#actionPanel [data-act="play"]',
+        title: 'Free, and Large',
+        text: () => mapLesson && mapLesson.name === 'Market Trade Exchange'
+            ? `Play it: <b>6 Charisma</b> and <b>10 Gold</b>, for nothing. And a second
+               <b>Trade Route</b> — the whole table's Survival, Charisma, Alchemy and
+               Prospecting stay open to you for the rest of the game. Skills this late are
+               still worth having: half of Act 3's biggest cards are scored <i>off</i> them.`
+            : `Play it — requirement and cost both waived. Maps don't just save you Gold,
+               they let you field cards you could never otherwise afford.`,
+        why: 'States the concrete payout (6 Charisma + 10 Gold + trade_route, all free) and connects late skills to the formula artifacts taught two steps later, so the beats reinforce instead of standing alone.',
+    },
+
+    freeTurn({
+        id: 'act3-free-1',
+        title: 'Your Turn',
+        text: `All yours. Everything in this deck is expensive and worth it — and there's
+               no Act 4 to save Gold for.`,
+        why: 'Breathing room between Act 3 stops, with the one strategic nudge that matters now (stop hoarding).',
+    }),
+
+    // ── STOP 2: artifacts stop paying flat numbers and start paying formulas ──
+    {
+        // Watch mode: the hand stays live so they can read the card and, if they
+        // can afford it, play it on the free turn that follows. Explain-on-sight
+        // per the design brief — Artifacts are a "watch" type, not a hands-on one.
+        id: 'act3-formula', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
+        skipIf: () => !rigFormulaArtifact(),
+        title: 'Artifacts That Count Your Whole Game',
+        text: () => {
+            if (!artifactLesson) return '';
+            const what = FORMULA_TEXT[artifactLesson.special];
+            return `<b>${artifactLesson.name}</b> is an Artifact — but not like Act 2's.
+                   Those paid a flat number on the shield. <b>This one pays a formula:
+                   ${what}</b>.<br><br>
+                   That changes what your last turns are for. Every Survival you banked in
+                   Act 1, every mission you completed, every Potion you spent — none of it
+                   was only for the moment. Act 3's artifacts go back and <b>count it all
+                   again</b>. The quiet game you've been playing is about to be scored
+                   twice.`;
+        },
+        anatomy: () => artifactLesson
+            ? AN(`assets/cards/regular/${artifactLesson.filename}`, {
+                left: ['⬅ <b>What it asks</b> — check the top-left. Act 3 asks for more, because Act 3 pays more.'],
+                right: [`<b>What it pays ➡</b> not a fixed number — ${FORMULA_TEXT[artifactLesson.special]}.`],
+                below: `Look for these before you spend your last turns: a formula artifact can be worth more than every card you played to get it.`,
+            })
+            : '',
+        why: "The genuinely new Act 3 idea and the one most likely to be missed — formula scoring retroactively rewards the whole game. FORMULA_TEXT phrasings were checked one by one against each card's audit line.",
+    },
+
+    // ── STOP 3: the Chemicals — the only cards that reach across the table ──
+    {
+        id: 'act3-chemicals', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
+        skipIf: () => !rigChemical(),
+        title: 'The Chemicals',
+        text: () => {
+            if (!chemLesson) return '';
+            return `<b>${chemLesson.name}</b> — one of the three <b>Chemicals</b>, and the
+                   only cards in FAVOR that reach across the table.<br><br>
+                   <b>Chemical X</b> moves your ring to <b>any slot you like</b>, free,
+                   ignoring the 5-Gold-a-space rule entirely. <b>Chemical Y</b> takes one
+                   Adventure you've played and <b>doubles its Favor</b>. And <b>Chemical
+                   Z</b> hands <b>15 Scorn to every other heir</b> — the single most
+                   destructive card in the game, though it costs you 5 Scorn of your own.
+                   <br><br>
+                   They are gated on <b>Alchemy</b>: X asks only 2, but Y wants six
+                   <i>and</i> a Philosopher's Stone, and Z wants five Alchemy and five
+                   Prospecting. Deep Alchemy is what buys you a seat at this table.`;
+        },
+        why: "Verified against the data: X = move_slider_any (req 2 Alchemy), Y = double_adventure_favor (6 Alchemy + Stone), Z = others_15_scorn (5 Alchemy + 5 Prospecting). Pays off the Act 2 Mind's Eye/Stone lesson by showing what the keys actually unlock.",
+    },
+
     {
         id: 'act3-play', ready: () => gameplayIdle(), mode: 'watch',
         advance: () => pastDraft(3),
         title: 'The Last Act Is Yours',
-        text: `Play it out — every card, every choice. Cash your Maps, borrow what you're
-               short, and pile on Power: this Melee is worth more than both the others
-               together.`,
-        why: 'One watch step across the entire Act 3 draft. Nothing new to teach, and Wyatt wants the player driving by now.',
+        text: `That's everything FAVOR has. Play the Act out — cash your Maps, borrow what
+               you're short, chase a last mission, and pile on Power: this Melee is worth
+               more than the other two together. <b>Spend it all.</b>`,
+        why: 'One watch step across the rest of the Act 3 draft. Nothing new left to teach, and by now the player should be driving.',
     },
     {
         id: 'act3-missions', phaseGated: 'missions', act: 3, mode: 'watch',
@@ -1323,6 +1566,7 @@
         renderGameState();
 
         buildDom();
+        installThrowGuard();   // lesson-card lock (see lockCardTo)
         active = true;
         // The tutorial owns pacing — this flag tells showMeleeSplash to WAIT
         // for a tap instead of auto-closing, so the Melee can be narrated.
@@ -1332,7 +1576,7 @@
         // Silence the in-game coach-marks (Prong 2) — they'd fire a SECOND
         // tutorial overlay on top of this one. coachTick early-returns on this.
         window._coachOff = true;
-        tick = setInterval(layout, 300);
+        tick = setInterval(() => { layout(); reassertMarks(); }, 300);
         showStep(0);
         // Arm turn 1 exactly like a real act start: rivals think, then commit;
         // the player drags to throw when the script reaches the throw step.

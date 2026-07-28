@@ -41,6 +41,15 @@
 .tut-choice:not(.primary) { opacity: 0.9; }
 .tut-choice:not(.primary) span { font-size: 13px; }
 .tut-count { font-size: 11px; color: rgba(240, 230, 211, 0.45); margin-top: 8px; text-align: right; font-family: 'Cinzel', serif; }
+/* Lesson-card lock: while a step points at one card, the rest of the hand is
+   out of play. Greyed and pointer-dead so the drag can't even start on them —
+   the throwCard guard in tutorial.js is the backstop, this is the affordance. */
+.hand-card.tut-locked {
+    opacity: 0.3;
+    filter: grayscale(0.75);
+    pointer-events: none !important;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+}
 .tut-green { color: #8ce17d; font-weight: 700; }
 .tut-orange { color: #ff9d3c; font-weight: 700; }
 
