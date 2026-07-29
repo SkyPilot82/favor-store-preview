@@ -1746,7 +1746,16 @@
         // re-derive (idempotent, menu-gated inside; un-awaited so a
         // celebration never holds the chip). Retro first: "your board
         // turned" before "a stranger arrives".
-        checkSideBRetro().then(() => checkEarnedHero()).then(() => checkRewardRetro()).catch(() => {});
+        // Never on the How-to-Play page. Each of these announces a reward that
+        // was already earned and marks it shown (localStorage favorShownUnlock_*)
+        // BEFORE it appears — so one firing behind the tutorial shield is spent
+        // forever, unseen. Their own guard is only "is a game on screen", which
+        // is a RACE here: meta boots on load and the tutorial calls
+        // showGameScreen() a beat later. TUT_PAGE settles it. Skipping is free —
+        // every latch re-derives from the row on the next real boot.
+        if (!window.TUT_PAGE) {
+            checkSideBRetro().then(() => checkEarnedHero()).then(() => checkRewardRetro()).catch(() => {});
+        }
         // _me just landed -- repaint the WANTED plaque so its CLAIMED stamp is
         // driven by the row arriving rather than by a guessed timer. modes.js
         // loads after this file, so on the very first boot FMODES may not exist
