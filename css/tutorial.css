@@ -9,6 +9,9 @@
     transition: left 0.35s ease, top 0.35s ease, width 0.35s ease, height 0.35s ease;
 }
 #tutRoot.tut-watch #tutHole { display: none !important; }
+/* While the spotlight is tracking a card it must keep up with the bloom
+   (0.22s) — its own 0.35s ease would trail behind and clip the card. */
+#tutHole.tut-hole-track { transition: none; }
 
 #tutBubble {
     position: fixed; z-index: 12000; pointer-events: auto;

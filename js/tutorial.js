@@ -457,6 +457,10 @@
         return document.querySelector(s.target);
     }
 
+    // The phone/table-view build (same query ui.js uses for isCompactLandscape).
+    const isShortScreen = () =>
+        window.matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
+
     function layout() {
         if (!active) return;
         const s = STEPS[stepIdx];
@@ -479,7 +483,12 @@
             placeBubble(null, s);
             return;
         }
-        const el = targetEl(s);
+        // An anatomy step carries the card INSIDE the bubble, and on a phone
+        // that bubble is most of the screen. Spotlighting the hand as well only
+        // guarantees the prompt covers it — so on a short screen these steps
+        // drop the spotlight and simply centre. Desktop is unchanged, where
+        // there is room for both.
+        const el = (s._hasAnatomy && isShortScreen()) ? null : targetEl(s);
         const watch = s.mode === 'watch';
         root.classList.toggle('tut-watch', watch);
 
@@ -494,8 +503,20 @@
             placeBubble(null, s);
             return;
         }
-        const pad = s.pad != null ? s.pad : 10;
-        const r = el.getBoundingClientRect();
+        // A step that points at ONE card spotlights the CARD, not the hand strip.
+        // The dim is a 200vmax box-shadow spreading from #tutHole, and the hand
+        // sits far below it in the stack (z~40 vs 11985) — so anything outside
+        // the hole is dimmed no matter how the card is layered. Hovering blooms
+        // the card to ~4x, up and out of the strip, and everything above the
+        // strip's edge went dark: Wyatt saw "only the bottom bit of the card
+        // highlighted". Tracking the card's live rect keeps the whole of it lit,
+        // bloomed or not, and the transition is dropped so the hole keeps up
+        // with a bloom that animates faster than it does.
+        const cardEl = (s.spotlightCard && pulseEl && document.contains(pulseEl)
+            && pulseEl.getBoundingClientRect().width) ? pulseEl : null;
+        hole.classList.toggle('tut-hole-track', !!cardEl);
+        const pad = cardEl ? 8 : (s.pad != null ? s.pad : 10);
+        const r = (cardEl || el).getBoundingClientRect();
         const x = Math.max(0, r.left - pad), y = Math.max(0, r.top - pad);
         const w = Math.min(window.innerWidth, r.right + pad) - x;
         const h = Math.min(window.innerHeight, r.bottom + pad) - y;
@@ -509,27 +530,65 @@
         placeBubble({ x, y, w, h }, s);
     }
 
+    const areaOverlap = (a, b) => {
+        const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        return (w > 0 && h > 0) ? w * h : 0;
+    };
+
+    // Everything here is positioned in EXPLICIT PIXELS, including the centred
+    // case, which used to ride on a `left: 50% !important` class rule. That rule
+    // was losing to a stale inline `left` and parking centred prompts 200px off
+    // the left edge of the screen (found by measuring every step, not by
+    // reading the CSS — the stylesheet looks correct).
+    //
+    // The bubble also now REFUSES to sit on top of the thing it is pointing at
+    // where it has any choice: it tries below / above / right / left and keeps
+    // whichever lands fully on screen without covering the spotlight. That is
+    // Wyatt's "the text box covers up what the player needs to see".
     function placeBubble(rect, s) {
         bubble.classList.remove('tut-b-center', 'tut-b-corner', 'tut-b-left', 'tut-b-right');
+        // Watch beats keep the corner treatment — deliberately out of the way.
         if (s.mode === 'watch') { bubble.classList.add('tut-b-corner'); bubble.style.left = ''; bubble.style.top = ''; return; }
-        // Pinned to a side — used when the spotlit thing sits in the middle (the
-        // board on the slider step, the mission card on the pick step) so the
-        // bubble doesn't cover it. CSS handles the actual placement.
         if (s.bubbleSide === 'left' || s.bubbleSide === 'right') {
             bubble.classList.add(s.bubbleSide === 'left' ? 'tut-b-left' : 'tut-b-right');
             bubble.style.left = ''; bubble.style.top = ''; return;
         }
-        if (!rect) { bubble.classList.add('tut-b-center'); bubble.style.left = ''; bubble.style.top = ''; return; }
-        // Use the REAL bubble size (compact CSS makes it narrower/shorter on phones).
-        const bw = bubble.offsetWidth || Math.min(430, window.innerWidth - 24);
+        const VW = window.innerWidth, VH = window.innerHeight, M = 10, GAP = 14;
+        const bw = bubble.offsetWidth || Math.min(430, VW - 24);
         const bh = bubble.offsetHeight || 180;
-        let x = Math.min(Math.max(8, rect.x + rect.w / 2 - bw / 2), window.innerWidth - bw - 8);
-        let yy = rect.y + rect.h + 14;
-        if (yy + bh > window.innerHeight - 10) yy = rect.y - bh - 14;   // flip above
-        // Never let the bubble sit partly off a short screen — clamp on-screen.
-        yy = Math.max(8, Math.min(yy, window.innerHeight - bh - 8));
-        bubble.style.left = x + 'px';
-        bubble.style.top = yy + 'px';
+        const clampX = v => Math.max(M, Math.min(v, VW - bw - M));
+        const clampY = v => Math.max(M, Math.min(v, VH - bh - M));
+        const put = (x, y) => { bubble.style.left = clampX(x) + 'px'; bubble.style.top = clampY(y) + 'px'; };
+
+        if (!rect) { put((VW - bw) / 2, (VH - bh) / 2); return; }
+
+        // Bias sideways AWAY from the card being pointed at, so on the steps
+        // that spotlight one card the prompt naturally settles on the empty side
+        // rather than over the fan.
+        let bias = rect.x + rect.w / 2;
+        if (pulseEl && document.contains(pulseEl)) {
+            const p = pulseEl.getBoundingClientRect();
+            if (p.width) bias = (p.left + p.width / 2) < VW / 2 ? VW * 0.72 : VW * 0.28;
+        }
+        const midX = clampX(bias - bw / 2);
+        const midY = clampY(rect.y + rect.h / 2 - bh / 2);
+        const cands = [
+            { x: midX, y: rect.y + rect.h + GAP },      // below
+            { x: midX, y: rect.y - bh - GAP },          // above
+            { x: rect.x + rect.w + GAP, y: midY },      // right
+            { x: rect.x - bw - GAP, y: midY },          // left
+        ];
+        let best = null;
+        cands.forEach(c => {
+            const fits = c.x >= M - 1 && c.y >= M - 1 && c.x + bw <= VW - M + 1 && c.y + bh <= VH - M + 1;
+            // Score AFTER clamping — an off-screen candidate gets dragged back
+            // on screen and may then cover the target, which must count against it.
+            const box = { x: clampX(c.x), y: clampY(c.y), w: bw, h: bh };
+            const score = (fits ? 0 : 1e7) + areaOverlap(box, rect);
+            if (!best || score < best.score) best = { x: c.x, y: c.y, score: score };
+        });
+        put(best.x, best.y);
     }
 
     // ── Step engine ──────────────────────────────────────────────────
@@ -874,7 +933,7 @@
         why: 'Explicit design ask: teach the green glow AND the disclaimer that affordability can change mid-round.',
     },
     {
-        id: 'throw-hunting', target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
+        id: 'throw-hunting', spotlightCard: true, target: '#handZone', advance: () => game.pendingActivations[0] !== null, pad: 16,
         lockCard: () => inHand('Hunting'),
         pulse: '.hand-card.playable', pulseCls: 'tut-pulse-green',
         title: 'Throw Your First Card',
@@ -907,7 +966,7 @@
 
     // ══════════ TURN 2 — WEAPON (Power feeds the Melee) ══════════
     {
-        id: 'weapon-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Shark Tooth'),
+        id: 'weapon-turn', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Shark Tooth'),
         onReady: () => rigTurn(['Shark Tooth']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'A Weapon — Power for the Melee',
@@ -961,7 +1020,7 @@
 
     // ══════════ TURN 3 — MISSION LETTER (claim a mission) ══════════
     {
-        id: 'mission-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Mission Letter'),
+        id: 'mission-turn', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Mission Letter'),
         onReady: () => { rigTurn(['Mission Letter']); rigMissions(); },
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'The Mission Letter',
@@ -1006,7 +1065,7 @@
 
     // ══════════ TURN 4 — ENDEAVOR (finish the mission requirement) ══════════
     {
-        id: 'build-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('First Aid'),
+        id: 'build-turn', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('First Aid'),
         onReady: () => rigTurn(['First Aid']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'Keep Building',
@@ -1025,7 +1084,7 @@
 
     // ══════════ TURN 5 — DISCARD (the bad-hand economy; Borrow waits for Act 2) ══════════
     {
-        id: 'discard-turn', ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Cooking'),
+        id: 'discard-turn', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', lockCard: () => inHand('Cooking'),
         onReady: () => rigTurn(['Cooking']),
         advance: () => game.pendingActivations[0] !== null, pad: 16,
         title: 'Not Every Card Is For You',
@@ -1120,7 +1179,7 @@
         // Merchant"; Great North Connection lists it in reqMaps, so holding it
         // waives BOTH the requirement and the cost — checkRequirements returns
         // mapFree and the hand renders it .freeplay (orange).
-        id: 'act2-map', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        id: 'act2-map', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', pad: 16,
         lockCard: () => inHand('Great North Connection'),
         onReady: () => rigTurn(['Great North Connection']),
         advance: () => game.pendingActivations[0] !== null,
@@ -1164,7 +1223,7 @@
         // Rigged ADAPTIVELY, not by name: after a free turn we can't know what
         // the player built, so pick whatever card the table can actually teach
         // borrowing with right now — preferring a Potion so one stop covers both.
-        id: 'act2-borrow-throw', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        id: 'act2-borrow-throw', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', pad: 16,
         lockCard: () => (borrowLesson ? borrowLesson.card : null),
         // skipIf runs when the gate fires, so the rig happens against the state
         // the player actually arrives in — and doubles as the "is there a borrow
@@ -1243,20 +1302,19 @@
         // types hands-on, and these two are gates, not plays.
         id: 'act2-elite', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
         onReady: () => rigTurn(["Mind's Eye"]),
-        title: "Wisdom: The Two Keys",
-        text: `That's a <b>Wisdom</b> card at the front of your hand — <b>Mind's Eye</b>.
-               Wisdom cards carry the two treasures the whole late game is built around:
-               the <b>Mind's Eye</b> and the <b>Philosopher's Stone</b>.<br><br>
-               They are not skills. <b>They cannot be borrowed</b> — no amount of Gold buys
-               one off a neighbour. If a card demands a Mind's Eye and you haven't got one,
-               that card is simply shut to you. Earning one early is what opens Act 3's
-               biggest scores.`,
+        title: "The Two Treasures",
+        text: `<b>Mind's Eye</b> is at the front of your hand. It and the
+               <b>Philosopher's Stone</b> are the two treasures the late game is built
+               around — and they are <b>not skills</b>.<br><br>
+               <b>They cannot be borrowed.</b> No amount of Gold buys one off a neighbour.
+               If a card asks for a Mind's Eye and you haven't got one, that card is shut
+               to you. Earning one now is what opens Act 3's biggest scores.`,
         anatomy: () => AN("assets/cards/regular/Mind_s Eye Card.jpg", {
-            left: ['⬅ <b>Its own cost:</b> 1 Alchemy, 1 Prospecting, 1 Knowledge — spread across three skills, which is what makes it hard.'],
-            right: ['<b>What it grants ➡</b> 1 Alchemy, and the <b>Mind\'s Eye</b> itself — a treasure you keep, not a skill.'],
-            below: `Its twin, the <b>Philosopher's Stone</b>, works the same way from the other side: 1 Knowledge, 1 Prospecting, 1 Alchemy to earn, and it grants the Stone. Neither can ever be borrowed.`,
+            left: ['⬅ <b>Costs</b> 1 Alchemy, 1 Prospecting, 1 Knowledge — three different skills, which is what makes it hard.'],
+            right: ['<b>Grants ➡</b> 1 Alchemy, and the <b>Mind\'s Eye</b> itself — a treasure you keep, not a skill.'],
+            below: `The <b>Philosopher's Stone</b> is earned the same way: 1 Knowledge, 1 Prospecting, 1 Alchemy.`,
         }),
-        why: "Rulebook: Mind's Eye / Philosopher's Stone are elite gate resources that can NEVER be borrowed — the one hard wall in a game where everything else is for hire. Taught right after borrowing so the exception lands against the rule.",
+        why: "Wyatt 7/28: explain Mind's Eye and the Philosopher's Stone directly and that they can't be borrowed — don't mention Wisdom cards at all. The type label was doing no work for the player; what matters is that these two things exist, cost three different skills, and are the one thing gold can't buy. Also trimmed, because this bubble filled a whole phone screen.",
     },
     {
         id: 'act2-artifact', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
@@ -1343,7 +1401,7 @@
         // so the chain that began with an Act 1 mission pays a THIRD time.
         // Rigged adaptively: by Act 3 the player may hold several maps, so ask
         // the engine which card is genuinely free rather than naming one.
-        id: 'act3-map', ready: () => gameplayIdle(), target: '#handZone', pad: 16,
+        id: 'act3-map', spotlightCard: true, ready: () => gameplayIdle(), target: '#handZone', pad: 16,
         skipIf: () => !rigMapFree(),
         lockCard: () => mapLesson,
         advance: () => game.pendingActivations[0] !== null,
@@ -1494,7 +1552,10 @@
     STEPS.forEach(s => {
         if (typeof s.anatomy === 'function') {
             const fn = s.anatomy;
+            s._hasAnatomy = true;
             Object.defineProperty(s, 'anatomy', { get: fn });
+        } else if (s.anatomy) {
+            s._hasAnatomy = true;
         }
     });
 
@@ -1585,9 +1646,17 @@
 
     // goto('step-id') — review/debug seam: jump the guide to any step.
     // Game state does NOT rewind; use it to proof-read prompts in place.
-    function goto(id) {
+    // `force` shows the step immediately, ignoring its ready gate and skipIf —
+    // the only way to lay every prompt out for a placement audit without
+    // playing a whole game to reach each one.
+    function goto(id, force) {
         const i = STEPS.findIndex(x => x.id === id);
-        if (i >= 0) showStep(i);
+        if (i < 0) return -1;
+        if (!force) { showStep(i); return i; }
+        const s = STEPS[i];
+        const savedReady = s.ready, savedSkip = s.skipIf;
+        s.ready = null; s.skipIf = null;
+        try { showStep(i); } finally { s.ready = savedReady; s.skipIf = savedSkip; }
         return i;
     }
     // cur() — which step is on screen, and is it actually showing yet (a
@@ -1603,6 +1672,16 @@
             // on what the tap OPENS rather than on the tap itself.)
             needsClick: s.advance === 'click' || !!s.tapTarget,
             target: typeof s.target === 'string' ? s.target : null,
+            // What the spotlight actually resolved to, for placement audits —
+            // the selector alone lies when coachEl swaps in a table-view twin.
+            resolved: (() => {
+                let el = null;
+                try { el = targetEl(s); } catch (e) { }
+                if (!el) return null;
+                const b = el.getBoundingClientRect();
+                return { desc: el.id || el.className || el.tagName,
+                         rect: [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)] };
+            })(),
         } : null;
     };
     window.TUT = { start, steps: STEPS, goto, cur, release };
