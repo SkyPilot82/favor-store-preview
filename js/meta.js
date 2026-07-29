@@ -747,8 +747,19 @@
             // No crown — same flex-wrap off-center flaw as showRewardCelebration.
             document.getElementById('champSub').innerHTML =
                 'Two heroes at Level 5 — a new hero joins your court, earned, never sold';
+            // The new hero's BOARD — this dress announced a hero with no art
+            // at all. The full board, not a circle crop: character images are
+            // landscape boards (1600x1009), and at celebration size a circle
+            // crop shows a shrunken scene rather than a face.
+            const art = document.getElementById('champArt');
+            if (art) art.innerHTML =
+                `<img class="champ-hero-board" src="assets/characters/${char.filename}" alt="">`;
             ov.classList.add('active');
-            const done = () => { ov.classList.remove('active'); resolve(); };
+            const done = () => {
+                ov.classList.remove('active');
+                if (art) art.innerHTML = '';
+                resolve();
+            };
             ov.onclick = done;
             document.getElementById('champBtn').onclick = (e) => { e.stopPropagation(); done(); };
         });
@@ -1153,14 +1164,29 @@
     function showChampOverlay(m) {
         return new Promise(resolve => {
             const ov = document.getElementById('champOverlay');
+            const art = document.getElementById('champArt');
             const first = m.place === 1;
             document.getElementById('champTitle').textContent = first
                 ? 'You Placed 1st — You are the Daily Champion!'
                 : `You Placed ${PLACE_WORD[m.place - 1]} on the Daily Board`;
             document.getElementById('champSub').innerHTML =
-                `${first ? CROWN_SVG + ' ' : ''}${m.stars} Stars earned · ${m.dateKey}`;
+                `${m.stars} Stars earned · ${m.dateKey}`;
+            // The medal — this dress used to be the plainest of the frame's
+            // five (title, one small line, button) for what is the game's
+            // biggest daily honour. Gold/silver/bronze by place, crowned for
+            // the champion; the crown moved here from the sub, where its
+            // inline SVG used to shove the text off-center as a flex item.
+            if (art) {
+                art.innerHTML = `<div class="champ-place ${CHAMP_KEYS[m.place - 1] || ''}">
+                    ${first ? CROWN_SVG : ''}<span>${PLACE_WORD[m.place - 1] || m.place + 'th'}</span>
+                </div>`;
+            }
             ov.classList.add('active');
-            const done = () => { ov.classList.remove('active'); resolve(); };
+            const done = () => {
+                ov.classList.remove('active');
+                if (art) art.innerHTML = '';   // this dress mounts art now — leave the stage clean
+                resolve();
+            };
             ov.onclick = done;
             document.getElementById('champBtn').onclick = (e) => { e.stopPropagation(); done(); };
         });
@@ -1218,7 +1244,8 @@
     // seal survives underneath as the internal token — signing in on a new
     // device simply claimSeal()s the mapped uid. Platform picks the ONE
     // offered door: Apple in the iOS shell, Steam identity in the Steam
-    // shell (stub until the Steam build is testable), Google on the web.
+    // shell (stub until the Steam build is testable), Google on the web
+    // (stubbed in the Android shell — Google OAuth refuses WebViews).
     //
     // CONFLICT RULE (deliberate): an identity already linked to another
     // court NEVER re-links — the device SWITCHES to the linked court after
@@ -1227,6 +1254,7 @@
     // politely. First link wins; nothing merges; nothing silently moves.
     const SHELL_IOS = /FavorShell-iOS/.test(navigator.userAgent);
     const SHELL_STEAM = /FavorShell-Steam/.test(navigator.userAgent);
+    const SHELL_ANDROID = /FavorShell-Android/.test(navigator.userAgent);
     // "FAVOR Web" client on the testroom-75200 project (created 7/20).
     // Origins: playfavor.net, www.playfavor.net, localhost:8891 (the rig).
     const GOOGLE_CLIENT_ID = window.__FAVOR_GOOGLE_CLIENT
@@ -1425,6 +1453,11 @@
                 : '<div class="pf-note">Account linking arrives with the next FAVOR update.</div>';
         } else if (SIGN_PROVIDER === 'steam') {
             door = '<div class="pf-note">Steam sign-in arrives with the Steam release.</div>';
+        } else if (SHELL_ANDROID) {
+            // Google's OAuth refuses embedded WebViews (disallowed_useragent),
+            // so the Android shell gets an honest note instead of a dead GIS
+            // button — the same one-door-per-platform law the shells follow.
+            door = '<div class="pf-note">Account linking arrives with a coming FAVOR update.</div>';
         } else {
             door = gisAvailable()
                 ? '<div class="pf-gsi-host" id="pfGsi"></div>'
@@ -2387,12 +2420,12 @@
     const PAYPAL_BUSINESS = 'gablewyatt@gmail.com';
     const IPN_NOTIFY_URL = 'https://nationgame.live/api/favor/paypal/ipn';
 
-    // The iOS shell (WKWebView, UA carries "FavorShell-iOS") must not show
-    // an external purchase rail — Apple 3.1.1. The Mint simply doesn't
-    // exist there (nor in the Steam shell — Valve routes MTX through its
-    // own wallet); Stars still arrive from play, daily crowns, and any
-    // purchase made on the web (same favorUid account).
-    const IOS_SHELL = /FavorShell-(iOS|Steam)/.test(navigator.userAgent);
+    // The app shells (UA carries "FavorShell-iOS" / "-Steam" / "-Android")
+    // must not show an external purchase rail — Apple 3.1.1, Valve's wallet
+    // rules, and Google Play's payments policy all forbid the same thing.
+    // The Mint simply doesn't exist there; Stars still arrive from play,
+    // daily crowns, and any purchase made on the web (same favorUid account).
+    const IOS_SHELL = /FavorShell-(iOS|Steam|Android)/.test(navigator.userAgent);
 
     let _confirmingPack = null;
     let _starsWatch = null;    // { baseline } while a PayPal tab may be paying
@@ -2478,8 +2511,14 @@
             if (!ov) { resolve(); return; }
             document.getElementById('champTitle').textContent = 'The Royal Mint Delivers!';
             document.getElementById('champSub').innerHTML = `★ ${stars} Stars join your purse`;
+            const art = document.getElementById('champArt');
+            if (art) art.innerHTML = '<div class="champ-place gold champ-star">★</div>';
             ov.classList.add('active');
-            const done = () => { ov.classList.remove('active'); resolve(); };
+            const done = () => {
+                ov.classList.remove('active');
+                if (art) art.innerHTML = '';
+                resolve();
+            };
             ov.onclick = done;
             document.getElementById('champBtn').onclick = (e) => { e.stopPropagation(); done(); };
         });
