@@ -16,7 +16,13 @@
 
     <!-- HOW TO PLAY v3 harness — this page IS index.html + the tutorial driver.
          Re-sync the DOM/scripts from index.html whenever index.html changes. -->
-    <script>window._mpSkipQueue = true; window.TUTORIAL_AUTOSTART = true;</script>
+    <!-- TUT_PAGE marks this as the How-to-Play harness. MUST be set before the
+         deferred scripts run: the meta layer boots on load, long before
+         tutorial.js calls start(), so a flag set inside start() would lose the
+         race. Suppresses reward celebrations (which appear UNDER the tutorial
+         shield, undismissable, and are spent unseen) and stops this scripted,
+         seeded game posting its authored result to the real leaderboard. -->
+    <script>window._mpSkipQueue = true; window.TUTORIAL_AUTOSTART = true; window.TUT_PAGE = true;</script>
 
     <div id="buildVersion" style="position:fixed;bottom:2px;right:6px;z-index:99999;font:600 8px monospace;color:#e8caa0;opacity:.35;pointer-events:none"></div>
     <script>
@@ -621,11 +627,11 @@
     <script defer src="js/ai.js?v=v3a"></script>
     <script defer src="js/telemetry.js?v=v3a"></script>
     <script defer src="js/melee.js?v=v3a"></script>
-    <script defer src="js/ui.js?v=v3e"></script>
+    <script defer src="js/ui.js?v=v3j"></script>
     <script defer src="js/tablefx-pts.js?v=v3a"></script>
     <script defer src="js/tablefx.js?v=v3a"></script>
     <script defer src="js/ambient.js?v=v3a"></script>
-    <script defer src="js/meta.js?v=v3a"></script>
+    <script defer src="js/meta.js?v=v3j"></script>
     <script defer src="js/achievements.js?v=v3a"></script>
     <script defer src="js/almanac.js?v=v3a"></script>
     <script defer src="js/settings.js?v=v3a"></script>

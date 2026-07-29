@@ -1121,6 +1121,12 @@
     // celebrating the same purchase twice).
     async function drainMsgs() {
         let shown = 0;
+        // The How-to-Play harness boots this whole layer, and a congratulation
+        // that surfaced there would be UNREACHABLE (the tutorial shield sits
+        // above it and swallows the dismiss button) and then SPENT — every
+        // message is deleted from the queue once shown. So leave them queued;
+        // they'll be delivered, and celebrated properly, in the real game.
+        if (window.TUT_PAGE) return 0;
         try {
             const msgs = await dbGet(`players/${uid()}/msgQueue`);
             if (!msgs) return 0;
@@ -2579,7 +2585,10 @@
         // it. Awaiting it here delayed the PayPal-return cleanup underneath by a
         // whole read, which is a real bug for a player coming back from checkout
         // (the audit caught it). It celebrates itself whenever it lands.
-        if (window.FACH) window.FACH.sync();
+        // Not on the How-to-Play page: sync CLAIMS the awards and then
+        // celebrates them, so running it behind the tutorial shield would burn
+        // the celebration the player never got to see.
+        if (window.FACH && !window.TUT_PAGE) window.FACH.sync();
 
         // Back from a PayPal tab? Clean the URL, land the player in the
         // store, and watch for the Stars the IPN is about to credit.

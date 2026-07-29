@@ -6982,10 +6982,20 @@ function showScoring() {
     // The decision transcript flushes here — host-only in MP, this client
     // otherwise; fire-and-forget, the ceremony never waits on the wire
     // (telemetry, Hard-AI Phase 1).
-    if (window.FTEL) { try { FTEL.flush(scores, { humans: humansAtTable }); } catch (e) { /* never */ } }
+    // The How-to-Play game is SCRIPTED: a fixed seed, rigged hands, a mission
+    // pinned into the pool and rivals barred from claiming it. Its result is
+    // authored, not earned, so it must never touch the player's real record —
+    // no leaderboard post, no rating or XP, no achievements, no almanac
+    // unlocks, no telemetry, no Stars. Guarded on TUT_PAGE (the How-to-Play
+    // harness) rather than TUT_ACTIVE, because leaving the guide part-way
+    // through still leaves you playing that same rigged table.
+    // This is why a "You placed 3rd on the Daily Board" message started popping
+    // up over the tutorial: guided runs had been posting genuine results.
+    const recordThisGame = !window.TUT_PAGE;
+    if (window.FTEL && recordThisGame) { try { FTEL.flush(scores, { humans: humansAtTable }); } catch (e) { /* never */ } }
     clearSoloSave();   // the table finished — nothing left to resume
-    if (window.FALM) FALM.commitGame();  // finished games alone unlock almanac entries
-    if (window.FLB) {
+    if (window.FALM && recordThisGame) FALM.commitGame();  // finished games alone unlock almanac entries
+    if (window.FLB && recordThisGame) {
         // The resolved XP (computed INSIDE the posting transaction) paints
         // the victory chip late and raises the Level 5 ceremony — never a
         // re-read of the row, so it can neither miss nor double-fire.
@@ -6996,14 +7006,14 @@ function showScoring() {
     }
     // WANTED: finishing ahead of today's named rival pays Stars once
     // per window (modes.js owns the claim and the once-a-day gate).
-    if (window.FMODES) FMODES.rivalGameOver(scores);
+    if (window.FMODES && recordThisGame) FMODES.rivalGameOver(scores);
     if (mpActive()) FMP.gameOver();   // host tidies the record; everyone detaches
 
     // Achievements: hero victories, single-game feats, The Master. Runs AFTER
     // postGameResult so the row exists on a first-ever game (lazy join), and is
     // deliberately un-awaited — a slow grant must never hold up the victory
     // screen. It celebrates itself when it lands.
-    if (window.FACH && window.FLB) {
+    if (window.FACH && window.FLB && recordThisGame) {
         const meFirst = scores.length && scores[0].name === 'You';
         const snap = FACH.seatSnapshot(game, meFirst);
         // ⚠ Was `Promise.resolve(FLB.postGameResult)` — which resolves
