@@ -408,7 +408,7 @@
         };
         // Skip-anytime — persistent, works in every step (shielded or watch).
         root.querySelector('#tutSkip').onclick = skip;
-        window.addEventListener('resize', layout);
+        window.addEventListener('resize', () => { bubbleFixed = false; layout(); });
     }
 
     // Leave the guided game for the real menu. On the standalone How-to page
@@ -435,6 +435,7 @@
         if (!active) return;
         active = false;
         if (tick) clearInterval(tick);
+        stopCardTracking();
         clearPulse();
         removeThrowGuard();            // ui.js gets its own throwCard back
         tutMeleeGo();                  // free a pending splash, if any
@@ -472,6 +473,36 @@
     // The phone/table-view build (same query ui.js uses for isCompactLandscape).
     const isShortScreen = () =>
         window.matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
+
+    // While a step spotlights one card, re-run the layout EVERY FRAME. The
+    // 300ms heartbeat is far too slow to follow a 0.22s bloom: the card grows
+    // to ~4x and the lit hole arrives up to a third of a second later, which
+    // reads exactly like the card being half-dimmed. rAF costs nothing here —
+    // it only runs while such a step is on screen.
+    // A spotlight step places its prompt once and then holds it (see layout).
+    let trackRaf = null, bubbleFixed = false;
+    function startCardTracking() {
+        if (trackRaf != null) return;
+        let lastKey = '';
+        const frame = () => {
+            const s = STEPS[stepIdx];
+            if (!active || !s || !s.spotlightCard || !armed) { trackRaf = null; return; }
+            // Only re-lay-out when the card has actually moved. A bloom changes
+            // its rect every frame; a still card changes nothing and costs one
+            // getBoundingClientRect. This is a SMOOTHNESS layer only — the 300ms
+            // heartbeat still runs, so if rAF never fires the spotlight is
+            // simply as accurate as it was before, never wrong.
+            const el = lessonCardEl();
+            const r = el ? el.getBoundingClientRect() : null;
+            const key = r ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` : '';
+            if (key !== lastKey) { lastKey = key; layout(); }
+            trackRaf = requestAnimationFrame(frame);
+        };
+        trackRaf = requestAnimationFrame(frame);
+    }
+    function stopCardTracking() {
+        if (trackRaf != null) { cancelAnimationFrame(trackRaf); trackRaf = null; }
+    }
 
     function layout() {
         if (!active) return;
@@ -532,7 +563,10 @@
         // exist — snapping the hole out to the whole hand and back is exactly
         // the blink Wyatt saw on "A Card You Can't Afford". Hold the last good
         // position instead and pick the card up again next tick.
-        if (s.spotlightCard && !cardEl) { placeBubble(lastHoleRect, s); return; }
+        if (s.spotlightCard && !cardEl) {
+            if (!bubbleFixed) placeBubble(lastHoleRect, s);   // don't nudge a placed prompt
+            return;
+        }
         hole.classList.toggle('tut-hole-track', !!cardEl);
         const pad = cardEl ? 8 : (s.pad != null ? s.pad : 10);
         const r = (cardEl || el).getBoundingClientRect();
@@ -547,7 +581,13 @@
         set(blockers[1], { left: 0, top: (y + h) + 'px', width: '100vw', height: Math.max(0, window.innerHeight - y - h) + 'px', right: 'auto', bottom: 'auto' });
         set(blockers[2], { left: 0, top: y + 'px', width: x + 'px', height: h + 'px', right: 'auto', bottom: 'auto' });
         set(blockers[3], { left: (x + w) + 'px', top: y + 'px', width: Math.max(0, window.innerWidth - x - w) + 'px', height: h + 'px', right: 'auto', bottom: 'auto' });
-        placeBubble({ x, y, w, h }, s);
+        // A spotlight step places its prompt ONCE, from the card at REST. The
+        // tracking loop re-runs this every frame, and re-placing the bubble each
+        // time would send it skating across the screen as the card blooms.
+        if (!(s.spotlightCard && bubbleFixed)) {
+            placeBubble({ x, y, w, h }, s);
+            if (s.spotlightCard) bubbleFixed = true;
+        }
     }
 
     const areaOverlap = (a, b) => {
@@ -692,10 +732,11 @@
             armed = true;
             // Lock the hand to this lesson's card BEFORE the pulse, so the
             // greying-out and the glow appear in the same frame.
-            lastHoleRect = null;
+            lastHoleRect = null; bubbleFixed = false;
             if (s.lockCard) { try { lockCardTo(s.lockCard()); } catch (e) { clearCardLock(); } }
             applyPulse(s);
             layout();
+            if (s.spotlightCard) startCardTracking();
             armAdvance(s);
         };
 
@@ -725,6 +766,7 @@
     }
 
     function clearPulse() {
+        stopCardTracking();
         if (pulseEl) { pulseEl.classList.remove('tut-pulse', 'tut-pulse-green'); pulseEl = null; }
         if (clickArm) { document.removeEventListener('click', clickArm, true); clickArm = null; }
         clearCardLock();

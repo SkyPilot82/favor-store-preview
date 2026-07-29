@@ -26,10 +26,17 @@
 
     <div id="buildVersion" style="position:fixed;bottom:2px;right:6px;z-index:99999;font:600 8px monospace;color:#e8caa0;opacity:.35;pointer-events:none"></div>
     <script>
+    // Show the TUTORIAL build, not just ui.js. A cached howto.html silently pins
+    // the old tutorial.js and the page looks identical either way — which cost a
+    // review round arguing about a fix that was already deployed. A screenshot
+    // now says which build it came from.
     document.addEventListener('DOMContentLoaded', function() {
-        var ui = document.querySelector('script[src*="ui.js"]');
-        var stamp = ui ? (ui.src.split('?v=')[1] || '?') : '?';
-        document.getElementById('buildVersion').textContent = 'v' + stamp;
+        var pick = function (m) {
+            var el = document.querySelector('script[src*="' + m + '"]');
+            return el ? (el.src.split('?v=')[1] || '?') : '?';
+        };
+        document.getElementById('buildVersion').textContent =
+            'howto ' + pick('tutorial.js') + ' \u00b7 ui ' + pick('ui.js');
     });
     </script>
 
@@ -638,6 +645,6 @@
     <script defer src="js/mp.js?v=v3a"></script>
     <script defer src="js/modes.js?v=v3a"></script>
     <!-- The guided-game driver — reads/writes the same globals ui.js exposes -->
-    <script defer src="js/tutorial.js?v=v3l"></script>
+    <script defer src="js/tutorial.js?v=v3m"></script>
 </body>
 </html>
