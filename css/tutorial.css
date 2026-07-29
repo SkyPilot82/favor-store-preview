@@ -24,8 +24,15 @@
     transition: left 0.35s ease, top 0.35s ease;
 }
 #tutBubble.tut-b-center { left: 50% !important; top: 44% !important; transform: translate(-50%, -50%); }
+/* Watch-beat prompt. Bottom-RIGHT on desktop: the left rail is where the board,
+   purse, skills and — the reason for this — the MISSIONS strip live, and a
+   bottom-left prompt sat straight on top of the missions the player is being
+   told to think about (Wyatt). The right of a desktop table is the opponents
+   column, which is empty below their cards. Phone keeps bottom-left; its table
+   view puts nothing there. */
 #tutBubble.tut-b-corner {
-    left: 14px !important; top: auto !important; bottom: 14px; transform: none;
+    right: 14px !important; left: auto !important; top: auto !important;
+    bottom: 14px; transform: none;
     width: min(360px, calc(100vw - 28px)); opacity: 0.96;
 }
 /* Pinned to a side — leaves the middle of the screen (a board/mission card) clear. */
@@ -145,7 +152,9 @@
     }
     #tutBubble.tut-b-center { top: 50% !important; }
     /* Watch-mode corner bubble: keep it clear of the bottom hand strip */
-    #tutBubble.tut-b-corner { width: min(300px, calc(100vw - 20px)); bottom: 8px; left: 8px !important; font-size: 12.5px; }
+    /* Phone keeps the LEFT corner — must re-assert both sides, or the desktop
+       rule's `right` survives here and pins it to the wrong edge. */
+    #tutBubble.tut-b-corner { width: min(300px, calc(100vw - 20px)); bottom: 8px; left: 8px !important; right: auto !important; font-size: 12.5px; }
     .tut-kicker { font-size: 9px; }
     .tut-title { font-size: 15px; margin: 2px 0 4px; }
     .tut-next { margin-top: 7px; padding: 8px 14px; }

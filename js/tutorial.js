@@ -283,10 +283,22 @@
     // anything painted on can be wiped between one render and the next, and
     // both drag paths (_handDragEnd / _deskDragEnd) end in a bare throwCard(i)
     // that would sail straight through.
-    let lockedCardId = null, origThrowCard = null;
+    let lockedCardId = null, origThrowCard = null, lastHoleRect = null;
 
     function lockCardTo(card) { lockedCardId = card ? card.id : null; applyCardLock(); }
     function clearCardLock() { lockedCardId = null; applyCardLock(); }
+
+    // The DOM element for the card the current lesson is pointing at. Looked up
+    // by id through the hand index every time, because the hand re-renders
+    // constantly and any element reference we cached would go stale.
+    function lessonCardEl() {
+        if (lockedCardId == null) return null;
+        const hand = (game && game.players && game.players[0]) ? game.players[0].hand : [];
+        const idx = hand.findIndex(c => c && c.id === lockedCardId);
+        if (idx < 0) return null;
+        const all = [...document.querySelectorAll('.hand-card[data-hand-i="' + idx + '"]')];
+        return all.find(e => e.getBoundingClientRect().width > 0) || null;
+    }
 
     function applyCardLock() {
         const hand = (game && game.players && game.players[0]) ? game.players[0].hand : [];
@@ -508,12 +520,19 @@
         // sits far below it in the stack (z~40 vs 11985) — so anything outside
         // the hole is dimmed no matter how the card is layered. Hovering blooms
         // the card to ~4x, up and out of the strip, and everything above the
-        // strip's edge went dark: Wyatt saw "only the bottom bit of the card
-        // highlighted". Tracking the card's live rect keeps the whole of it lit,
-        // bloomed or not, and the transition is dropped so the hole keeps up
-        // with a bloom that animates faster than it does.
-        const cardEl = (s.spotlightCard && pulseEl && document.contains(pulseEl)
-            && pulseEl.getBoundingClientRect().width) ? pulseEl : null;
+        // strip's edge goes dark unless the HOLE follows it.
+        //
+        // The card is found by the LOCKED CARD'S ID, not by pulseEl: only three
+        // of these steps declare a `pulse`, so keying off the pulse left the
+        // other five (Shark Tooth, Mission Letter, First Aid, Cooking, the
+        // borrow lesson) falling back to the hand strip and still half-dimmed.
+        const cardEl = s.spotlightCard ? lessonCardEl() : null;
+        // Never fall back to the strip mid-step. The hand rebuilds its elements
+        // on every render, so for a tick or two the card element simply does not
+        // exist — snapping the hole out to the whole hand and back is exactly
+        // the blink Wyatt saw on "A Card You Can't Afford". Hold the last good
+        // position instead and pick the card up again next tick.
+        if (s.spotlightCard && !cardEl) { placeBubble(lastHoleRect, s); return; }
         hole.classList.toggle('tut-hole-track', !!cardEl);
         const pad = cardEl ? 8 : (s.pad != null ? s.pad : 10);
         const r = (cardEl || el).getBoundingClientRect();
@@ -522,6 +541,7 @@
         const h = Math.min(window.innerHeight, r.bottom + pad) - y;
         hole.style.display = 'block';
         Object.assign(hole.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+        lastHoleRect = { x: x, y: y, w: w, h: h };
         const set = (b, v) => Object.assign(b.style, { display: 'block' }, v);
         set(blockers[0], { left: 0, top: 0, width: '100vw', height: y + 'px', right: 'auto', bottom: 'auto' });
         set(blockers[1], { left: 0, top: (y + h) + 'px', width: '100vw', height: Math.max(0, window.innerHeight - y - h) + 'px', right: 'auto', bottom: 'auto' });
@@ -672,6 +692,7 @@
             armed = true;
             // Lock the hand to this lesson's card BEFORE the pulse, so the
             // greying-out and the glow appear in the same frame.
+            lastHoleRect = null;
             if (s.lockCard) { try { lockCardTo(s.lockCard()); } catch (e) { clearCardLock(); } }
             applyPulse(s);
             layout();
@@ -1656,7 +1677,13 @@
         const s = STEPS[i];
         const savedReady = s.ready, savedSkip = s.skipIf;
         s.ready = null; s.skipIf = null;
-        try { showStep(i); } finally { s.ready = savedReady; s.skipIf = savedSkip; }
+        // onReady is where a step rigs its lesson card into the hand, and it
+        // normally fires from the ready gate we just removed — so run it here or
+        // the step lays out pointing at a card that was never dealt.
+        try {
+            if (s.onReady) { try { s.onReady(); } catch (e) { /* preview only */ } }
+            showStep(i);
+        } finally { s.ready = savedReady; s.skipIf = savedSkip; }
         return i;
     }
     // cur() — which step is on screen, and is it actually showing yet (a
