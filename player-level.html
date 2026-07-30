@@ -115,6 +115,12 @@ td.lv { font-family: 'Cinzel', serif; font-weight: 900; color: var(--gold-light)
 .vs-pl-title, .vs-pl-tint, .vs-pl-table { color: var(--parchment-dim); }
 .vs-pl-title b, .vs-pl-tint b { color: var(--gold-light); }
 
+.pf-court-form {
+    font-family: 'Cinzel', serif; font-size: 10.5px; font-weight: 700;
+    letter-spacing: 1px; color: var(--gold-light);
+    background: rgba(0,0,0,0.35); border: 1px solid var(--gold-dark);
+    border-radius: 999px; padding: 2px 10px;
+}
 .veto { border: 1px dashed rgba(201,168,76,0.45); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
 .veto li { margin: 6px 0 6px 18px; color: #d8cdb4; }
 .veto b { color: var(--gold-light); }
@@ -158,7 +164,7 @@ a { color: #a9d4ff; }
             <span class="pc-plv pf-plv plv-bronze">12</span>
             <div class="pf-court-main">
                 <div class="pf-court-rank">
-                    <span class="pf-court-title plv-bronze">Envoy</span>
+                    <span class="pf-court-title plv-bronze">Steward</span>
                     <span class="pf-court-games">31 games played</span>
                 </div>
                 <div class="pf-court-track"><div class="pf-court-fill" style="width:40%"></div></div>
@@ -177,12 +183,39 @@ a { color: #a9d4ff; }
                 <div><span class="vs-d-what">Court Standing</span>
                     <span class="vs-xp-lv">Level <b>11</b><span class="vs-d-arrow">→</span><b>12</b></span></div>
                 <div class="vs-pl-notes">
-                    <span class="vs-pl-title">You are now <b>Envoy</b></span>
+                    <span class="vs-pl-title">You are now <b>Steward</b></span>
                     <span class="vs-pl-table">The court gifts you a table — see the store</span>
                 </div>
             </div>
         </div>
     </div>
+
+    <h2>The ranks, and why they sit in this order</h2>
+    <p class="note">
+        Ordered as real life ranks them: commoner → gentry (<b>Squire</b>, <b>Knight</b>) →
+        crown offices (<b>Steward</b>, <b>Magistrate</b>) → the peerage (<b>Baron</b>,
+        <b>Count</b>, <b>Earl</b>) → the great offices that <b>wield</b> the crown's power and so
+        outrank the nobles who hold land under it (a <b>Chancellor</b> runs the kingdom's law,
+        a <b>Viceroy</b> rules in the monarch's name, a <b>Regent</b> rules the realm itself) →
+        the crown. <b>Knight</b> is my pick to replace Courtier — the classic step up from Squire
+        (alternatives if it doesn't sing: Herald, Yeoman, Vassal). One honest footnote:
+        historically <b>Earl is the English word for Count</b> — same rank. It reads grander so
+        it works at 30, but if you want strict realism there, <b>Duke/Duchess</b> is the true
+        rung above Count and gives us a third his-and-hers pair.
+    </p>
+
+    <h2>His &amp; hers titles — the player chooses</h2>
+    <p class="note">
+        <b>Baron/Baroness</b>, <b>Count/Countess</b> and <b>King/Queen</b> are a choice: the first
+        time you earn one, the victory chip asks right there —
+        <span style="white-space:nowrap">“Choose your title:
+        <button class="pf-court-form" style="pointer-events:none">Baron</button>
+        <button class="pf-court-form" style="pointer-events:none">Baroness</button>”</span> —
+        and the choice carries to every later paired rank (a Baroness is later crowned
+        <b>Queen</b>). It can be changed any time on the profile's Court Standing card. Until
+        chosen, the rank shows both names. This is the one written piece of Court Standing
+        state — a choice can't be derived.
+    </p>
 
     <h2>The free table at Level 12</h2>
     <p class="note">
@@ -204,8 +237,10 @@ a { color: #a9d4ff; }
     <h2>Defaults on the table for veto</h2>
     <div class="veto"><ul>
         <li><b>The curve</b> — 401 games to Level 50. Faster? Slower?</li>
-        <li><b>The twelve ranks</b> — Wanderer, Squire, Courtier, Envoy, Steward, Magistrate,
-            Ambassador, Chancellor, Viceroy, Regent, Highlord, Crownkeeper.</li>
+        <li><b>The twelve ranks</b> — Peasant, Squire, Knight, Steward, Magistrate,
+            Baron/Baroness, Count/Countess, Earl, Chancellor, Viceroy, Regent, King/Queen.
+            (<b>Knight</b> is my Courtier replacement — veto welcome; and consider
+            <b>Duke/Duchess</b> over Earl, see above.)</li>
         <li><b>Tint tiers</b> — Bronze 10 · Silver 20 · Gold 30 · Platinum 40 · Radiant 50.</li>
         <li><b>Star drops</b> — ★5 at 2, ★10 at 6/10/14, ★15 at 18/20/25, ★20 at 30/35,
             ★25 at 40/45, ★50 at 50 (★220 total).</li>
@@ -226,8 +261,8 @@ a { color: #a9d4ff; }
 // the real numbers, not approximations.
 const plStep = n => n <= 2 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : n <= 19 ? 5 : n <= 29 ? 8 : n <= 39 ? 10 : 15;
 const CUM = [0]; for (let n = 1; n < 50; n++) CUM.push(CUM[n-1] + plStep(n));
-const TITLES = [[1,'Wanderer'],[4,'Squire'],[8,'Courtier'],[12,'Envoy'],[16,'Steward'],[20,'Magistrate'],
-    [25,'Ambassador'],[30,'Chancellor'],[35,'Viceroy'],[40,'Regent'],[45,'Highlord'],[50,'Crownkeeper']];
+const TITLES = [[1,'Peasant'],[4,'Squire'],[8,'Knight'],[12,'Steward'],[16,'Magistrate'],[20,'Baron/Baroness'],
+    [25,'Count/Countess'],[30,'Earl'],[35,'Chancellor'],[40,'Viceroy'],[45,'Regent'],[50,'King/Queen']];
 const STARS = {2:5,6:10,10:10,14:10,18:15,20:15,25:15,30:20,35:20,40:25,45:25,50:50};
 const TINTS = {10:['plv-bronze','Bronze name'],20:['plv-silver','Silver name'],30:['plv-gold','Gold name'],
     40:['plv-plat','Platinum name'],50:['plv-radiant','Radiant name']};
