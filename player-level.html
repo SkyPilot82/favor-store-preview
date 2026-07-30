@@ -197,11 +197,9 @@ a { color: #a9d4ff; }
         <b>Count</b>, <b>Earl</b>) → the great offices that <b>wield</b> the crown's power and so
         outrank the nobles who hold land under it (a <b>Chancellor</b> runs the kingdom's law,
         a <b>Viceroy</b> rules in the monarch's name, a <b>Regent</b> rules the realm itself) →
-        the crown. <b>Knight</b> is my pick to replace Courtier — the classic step up from Squire
-        (alternatives if it doesn't sing: Herald, Yeoman, Vassal). One honest footnote:
-        historically <b>Earl is the English word for Count</b> — same rank. It reads grander so
-        it works at 30, but if you want strict realism there, <b>Duke/Duchess</b> is the true
-        rung above Count and gives us a third his-and-hers pair.
+        the crown. <b>Herald</b> takes Courtier's rung — the crown's own voice at court
+        (Wyatt's call 7/30, since Knight and Duke/Duchess are heroes in the game: standing
+        rule, <b>no rank may share a name with a hero</b> — now enforced by the test probe).
     </p>
 
     <h2>His &amp; hers titles — the player chooses</h2>
@@ -237,10 +235,9 @@ a { color: #a9d4ff; }
     <h2>Defaults on the table for veto</h2>
     <div class="veto"><ul>
         <li><b>The curve</b> — 401 games to Level 50. Faster? Slower?</li>
-        <li><b>The twelve ranks</b> — Peasant, Squire, Knight, Steward, Magistrate,
-            Baron/Baroness, Count/Countess, Earl, Chancellor, Viceroy, Regent, King/Queen.
-            (<b>Knight</b> is my Courtier replacement — veto welcome; and consider
-            <b>Duke/Duchess</b> over Earl, see above.)</li>
+        <li><b>The twelve ranks</b> — Peasant, Squire, Herald, Steward, Magistrate,
+            Baron/Baroness, Count/Countess, Earl, Chancellor, Viceroy, Regent, King/Queen
+            (locked in with Wyatt 7/30).</li>
         <li><b>Tint tiers</b> — Bronze 10 · Silver 20 · Gold 30 · Platinum 40 · Radiant 50.</li>
         <li><b>Star drops</b> — ★5 at 2, ★10 at 6/10/14, ★15 at 18/20/25, ★20 at 30/35,
             ★25 at 40/45, ★50 at 50 (★220 total).</li>
@@ -261,7 +258,7 @@ a { color: #a9d4ff; }
 // the real numbers, not approximations.
 const plStep = n => n <= 2 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : n <= 19 ? 5 : n <= 29 ? 8 : n <= 39 ? 10 : 15;
 const CUM = [0]; for (let n = 1; n < 50; n++) CUM.push(CUM[n-1] + plStep(n));
-const TITLES = [[1,'Peasant'],[4,'Squire'],[8,'Knight'],[12,'Steward'],[16,'Magistrate'],[20,'Baron/Baroness'],
+const TITLES = [[1,'Peasant'],[4,'Squire'],[8,'Herald'],[12,'Steward'],[16,'Magistrate'],[20,'Baron/Baroness'],
     [25,'Count/Countess'],[30,'Earl'],[35,'Chancellor'],[40,'Viceroy'],[45,'Regent'],[50,'King/Queen']];
 const STARS = {2:5,6:10,10:10,14:10,18:15,20:15,25:15,30:20,35:20,40:25,45:25,50:50};
 const TINTS = {10:['plv-bronze','Bronze name'],20:['plv-silver','Silver name'],30:['plv-gold','Gold name'],
