@@ -18,8 +18,9 @@
  *   Act 2  — only the NEW things stop play (a Map's free play, borrowing, the
  *            Potion, the Mind's Eye / Philosopher's Stone gates, Artifacts);
  *            every other turn is theirs, unshielded (`freeTurn`).
- *   Act 3  — no new rules exist, so nothing interrupts but the Melee and the
- *            final score sheet.
+ *   Act 3  — no new rules, so only the showpieces stop play (the Map chain's
+ *            third payoff, a formula Artifact, the Chemicals, the summit
+ *            cards), then the Melee and the final score sheet.
  * At the end of Acts 1 and 2 the player is offered a FORK: carry on with the
  * guide, or `release()` — the tutorial tears itself down and this same game
  * continues as a normal one, board and score intact.
@@ -223,6 +224,23 @@
             : (c.name === 'Chemical X' ? 100 : 60));
         return chemLesson;
     }
+    // The summit of the deck — the cards the Act 2 keys lesson promised: the
+    // two double-figure Adventures, the potion that erases a mission's
+    // requirement, and the Mind's Eye that asks nothing at all. A card the
+    // player can actually pay for outranks one to admire; the biggest wins ties.
+    let peakLesson = null;
+    function rigPeak() {
+        const RANK = { 'Reunited': 4, "The Alchemist's Daughter": 3,
+                       'Life Essence': 2, 'Lens of Truth': 1 };
+        peakLesson = rigBest(c => {
+            const rank = RANK[c.name];
+            if (!rank) return null;
+            let can = false;
+            try { const q = game.checkRequirements(0, c); can = !!(q.canPlay || q.mapFree); } catch (e) {}
+            return rank + (can ? 100 : 0);
+        });
+        return peakLesson;
+    }
 
     const SKILL_LABEL = s => s.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
     // Name the seats that can actually lend the skills this lesson needs.
@@ -394,7 +412,17 @@
                 <div class="tut-choices"></div>
                 <div class="tut-count"></div>
             </div>
-            <button id="tutSkip" title="Leave the tutorial">Skip tutorial ✕</button>`;
+            <button id="tutSkip" title="Leave the tutorial">Skip tutorial ✕</button>
+            <div id="tutLeave">
+                <div class="tut-leave-card">
+                    <div class="tut-kicker">How to Play</div>
+                    <div class="tut-title">Leave the Tutorial?</div>
+                    <div class="tut-text">You can start it again any time from
+                        <b>How to Play</b> on the menu.</div>
+                    <button class="btn-royal primary tut-leave-go"><span>Back to Menu</span></button>
+                    <button class="btn-royal tut-leave-stay"><span>Keep Playing</span></button>
+                </div>
+            </div>`;
         document.body.appendChild(root);
         hole = root.querySelector('#tutHole');
         bubble = root.querySelector('#tutBubble');
@@ -408,17 +436,40 @@
         };
         // Skip-anytime — persistent, works in every step (shielded or watch).
         root.querySelector('#tutSkip').onclick = skip;
-        window.addEventListener('resize', () => { bubbleFixed = false; layout(); });
+        const leave = root.querySelector('#tutLeave');
+        leave.querySelector('.tut-leave-go').onclick = leaveToMenu;
+        leave.querySelector('.tut-leave-stay').onclick = () => leave.classList.remove('show');
+        // Tapping the backdrop is a cancel — the same read as every other
+        // dismissable overlay in the game.
+        leave.onclick = (e) => { if (e.target === leave) leave.classList.remove('show'); };
+        const onViewportChange = () => { insetCache = null; bubbleFixed = false; layout(); };
+        window.addEventListener('resize', onViewportChange);
+        window.addEventListener('orientationchange', onViewportChange);
     }
 
     // Leave the guided game for the real menu. On the standalone How-to page
     // (tools/howto.html = index.html + this driver) that lands on the title.
+    // Skip → back to the menu, behind an in-page confirmation.
+    //
+    // This used to call window.confirm(), and inside the iOS shell that button
+    // did NOTHING (Wyatt 7/29). A WKWebView only shows JS dialogs if its
+    // WKUIDelegate implements the dialog panels, and GameViewController — which
+    // declares WKUIDelegate — implements none; confirm() then returns false
+    // instantly, so skip() bailed on its own guard clause. A native dialog was
+    // the wrong instrument regardless: the tutorial owns a perfectly good
+    // bubble, and an OS alert in the middle of a medieval table is jarring.
     function skip() {
         if (!active) return;
-        if (!window.confirm('Leave the tutorial and go to the menu?')) return;
+        const panel = root && root.querySelector('#tutLeave');
+        if (!panel) { leaveToMenu(); return; }   // no panel built — just go
+        panel.classList.add('show');
+    }
+    function leaveToMenu() {
         active = false;
         if (tick) clearInterval(tick);
+        stopCardTracking();
         try { window.CINEMATIC_SPEED = 1.0; } catch (e) {}
+        removeThrowGuard();
         location.assign('index.html');
     }
 
@@ -590,6 +641,36 @@
         }
     }
 
+    // ── Safe-area insets (the notch) ─────────────────────────────────
+    // index.html sets viewport-fit=cover, so window.innerWidth INCLUDES the
+    // strip under an iPhone's camera cutout. Clamping a prompt to 10px from
+    // that edge puts it under the notch, which shears the first character off
+    // every line — exactly what Wyatt saw on an iPhone 12 Pro Max in
+    // landscape ("he top button is dead", "issing", "ther heirs'").
+    //
+    // env() can't be read from JS, so measure it: a probe whose padding IS the
+    // insets reports them back through getComputedStyle. Cached, and
+    // recomputed on resize/orientation change (rotating swaps which side the
+    // cutout is on).
+    let insetCache = null;
+    function safeInsets() {
+        if (insetCache) return insetCache;
+        let probe = document.getElementById('tutInsetProbe');
+        if (!probe) {
+            probe = document.createElement('div');
+            probe.id = 'tutInsetProbe';
+            probe.style.cssText = 'position:fixed;inset:0;pointer-events:none;visibility:hidden;'
+                + 'padding:env(safe-area-inset-top) env(safe-area-inset-right)'
+                + ' env(safe-area-inset-bottom) env(safe-area-inset-left);';
+            document.body.appendChild(probe);
+        }
+        const cs = getComputedStyle(probe);
+        const n = v => Math.max(0, parseFloat(v) || 0);
+        insetCache = { top: n(cs.paddingTop), right: n(cs.paddingRight),
+                       bottom: n(cs.paddingBottom), left: n(cs.paddingLeft) };
+        return insetCache;
+    }
+
     const areaOverlap = (a, b) => {
         const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
         const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
@@ -617,8 +698,13 @@
         const VW = window.innerWidth, VH = window.innerHeight, M = 10, GAP = 14;
         const bw = bubble.offsetWidth || Math.min(430, VW - 24);
         const bh = bubble.offsetHeight || 180;
-        const clampX = v => Math.max(M, Math.min(v, VW - bw - M));
-        const clampY = v => Math.max(M, Math.min(v, VH - bh - M));
+        // Clamp inside the SAFE box — the notch is part of the viewport under
+        // viewport-fit=cover, and a prompt flush to that edge loses characters.
+        const si = safeInsets();
+        const L = Math.max(M, si.left), R = Math.max(M, si.right);
+        const T = Math.max(M, si.top), B = Math.max(M, si.bottom);
+        const clampX = v => Math.max(L, Math.min(v, VW - bw - R));
+        const clampY = v => Math.max(T, Math.min(v, VH - bh - B));
         const put = (x, y) => { bubble.style.left = clampX(x) + 'px'; bubble.style.top = clampY(y) + 'px'; };
 
         if (!rect) { put((VW - bw) / 2, (VH - bh) / 2); return; }
@@ -641,7 +727,7 @@
         ];
         let best = null;
         cands.forEach(c => {
-            const fits = c.x >= M - 1 && c.y >= M - 1 && c.x + bw <= VW - M + 1 && c.y + bh <= VH - M + 1;
+            const fits = c.x >= L - 1 && c.y >= T - 1 && c.x + bw <= VW - R + 1 && c.y + bh <= VH - B + 1;
             // Score AFTER clamping — an off-screen candidate gets dragged back
             // on screen and may then cover the target, which must count against it.
             const box = { x: clampX(c.x), y: clampY(c.y), w: bw, h: bh };
@@ -1452,9 +1538,9 @@
                Adventures that pay in double figures, the Artifacts, the cards your Maps
                and your Mind's Eye were always for. Spend it all — <b>nothing you're
                holding at the end is worth anything.</b><br><br>
-               There are <b>no new rules left</b> — but there are three things this Act does
+               There are <b>no new rules left</b> — but there are four things this Act does
                that no other Act can, and I'll stop for each.`,
-        why: 'Sets the one strategic truth that changes in Act 3 (hoarding is now pure loss) and promises exactly three stops, so the free turns between them read as intentional.',
+        why: 'Sets the one strategic truth that changes in Act 3 (hoarding is now pure loss) and promises exactly four stops, so the free turns between them read as intentional.',
     },
 
     // ── The Map chain completes: Act 1's mission is still paying ──
@@ -1560,6 +1646,46 @@
                    Prospecting. Deep Alchemy is what buys you a seat at this table.`;
         },
         why: "Verified against the data: X = move_slider_any (req 2 Alchemy), Y = double_adventure_favor (6 Alchemy + Stone), Z = others_15_scorn (5 Alchemy + 5 Prospecting). Pays off the Act 2 Mind's Eye/Stone lesson by showing what the keys actually unlock.",
+    },
+
+    // ── STOP 4: the summit — the cards the Act 2 keys lesson promised ──
+    {
+        id: 'act3-peak', ready: () => gameplayIdle(), mode: 'watch', advance: 'next',
+        skipIf: () => !rigPeak(),
+        title: 'The Summit of the Deck',
+        text: () => {
+            if (!peakLesson) return '';
+            let q = null;
+            try { q = game.checkRequirements(0, peakLesson); } catch (e) {}
+            const now = q && (q.canPlay || q.mapFree)
+                ? `<br><br>And check your board — <b>you can pay for it right now</b>.`
+                : '';
+            const BODY = {
+                'Reunited':
+                    `<b>Reunited</b> — the single biggest score in FAVOR: <b>22 Favor</b>,
+                     and it hands you a <b>Philosopher's Stone</b> on top. The front door
+                     costs <b>12 Knowledge, a Mind's Eye and a Stone</b> — unless you hold
+                     the <b>Finding the Lost Corridor</b> Map, which waives every word of
+                     it. This is the card your keys were always pointed at.`,
+                "The Alchemist's Daughter":
+                    `<b>The Alchemist's Daughter</b> — <b>18 Favor</b>, an Alchemy, and a
+                     <b>Mind's Eye</b> of its own. The ask is a whole game's building —
+                     <b>5 Charisma, 5 Alchemy and 5 Power</b> — or simply the
+                     <b>A Day With the Birds</b> Map.`,
+                'Life Essence':
+                    `<b>Life Essence</b> — choose one of your active Missions and its
+                     requirement is <b>erased outright</b>: the mission you never quite
+                     built for simply resolves. It asks <b>4 Alchemy and a Mind's Eye</b>
+                     — one more door the keys open.`,
+                'Lens of Truth':
+                    `<b>Lens of Truth</b> — <b>3 Survival and a Mind's Eye</b>, for
+                     <b>no requirement at all</b>. Every other key in the game sits behind
+                     deep skills; this one is lying on the table. If Act 2 passed without
+                     your Mind's Eye, here is the late door back in.`,
+            };
+            return `${BODY[peakLesson.name] || ''}${now}`;
+        },
+        why: "Pays off the Act 2 keys promise ('opens Act 3's biggest scores') with the cards that cash it, data-verified: Reunited = 22 Favor + philosopher_stone special (req 12 Knowledge + Mind's Eye + Stone OR Finding the Lost Corridor Map), Alchemist's Daughter = 18 Favor + minds_eye special (req 5 Charisma/5 Alchemy/5 Power OR A Day With the Birds Map), Life Essence = remove_mission_requirements (4 Alchemy + Mind's Eye), Lens of Truth = 3 Survival + minds_eye with requirements: []. Rigged adaptively — a payable card outranks an admirable one, the biggest wins ties — and skips clean when none is reachable.",
     },
 
     {

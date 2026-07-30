@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAVOR — Court Standing (player level) · design review</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+:root {
+    --gold: #c9a84c; --gold-light: #e8d9a0; --gold-dark: #8a6a1f;
+    --parchment-dim: #b9a98c; --wood-dark: #1a0e06;
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    background: radial-gradient(ellipse at 50% 20%, #3a2312 0%, #241408 45%, #140a04 100%);
+    color: #e9e2cf; font-family: 'EB Garamond', serif; font-size: 17px;
+    padding: 40px 18px 90px; min-height: 100vh;
+}
+.wrap { max-width: 880px; margin: 0 auto; }
+h1 {
+    font-family: 'Cinzel', serif; font-weight: 900; color: var(--gold-light);
+    text-align: center; letter-spacing: 3px; font-size: 30px; margin-bottom: 6px;
+}
+.sub { text-align: center; color: var(--parchment-dim); margin-bottom: 8px; }
+.stamp { text-align: center; color: #7a6a4a; font-size: 13px; margin-bottom: 40px; }
+h2 {
+    font-family: 'Cinzel', serif; font-weight: 700; color: var(--gold);
+    letter-spacing: 2px; font-size: 19px; margin: 48px 0 8px;
+    border-bottom: 1px solid rgba(201,168,76,0.3); padding-bottom: 6px;
+}
+p.note { color: var(--parchment-dim); margin: 8px 0 18px; line-height: 1.5; }
+p.note b { color: var(--gold-light); }
+
+/* ── the real game classes, copied verbatim from style.css ── */
+.plv-bronze  { color: #d29a6a; }
+.plv-silver  { color: #ccd6e0; }
+.plv-gold    { color: #ecc65a; }
+.plv-plat    { color: #dceef5; text-shadow: 0 0 8px rgba(190,230,245,0.35); }
+.plv-radiant {
+    background: linear-gradient(100deg, #ecc65a 10%, #f5ecd0 35%, #7fd4ff 60%, #ecc65a 90%);
+    background-size: 300% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: plvRadiant 6s linear infinite;
+}
+@keyframes plvRadiant { to { background-position: -300% 0; } }
+.pc-plv {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 22px; padding: 0 3px; border-radius: 50%;
+    border: 2px solid #7a7f88;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.10), rgba(0,0,0,0.35));
+    color: #e9e2cf; font-size: 11px; font-weight: 900; font-family: 'Cinzel', serif; line-height: 1;
+}
+.pc-plv.plv-bronze { border-color: #b5794c; color: #d29a6a; }
+.pc-plv.plv-silver { border-color: #aeb9c6; color: #ccd6e0; }
+.pc-plv.plv-gold   { border-color: #d1a63e; color: #ecc65a; }
+.pc-plv.plv-plat   { border-color: #bfe0ee; color: #dceef5; box-shadow: 0 0 8px rgba(190,230,245,0.35); }
+.pc-plv.plv-radiant { border-color: #ecc65a; box-shadow: 0 0 10px rgba(236,198,90,0.55);
+    color: #f5ecd0; background: radial-gradient(circle at 35% 30%, rgba(236,198,90,0.35), rgba(0,0,0,0.35)); }
+
+/* menu chip mock */
+.chip-row { display: flex; flex-wrap: wrap; gap: 14px; margin: 18px 0; }
+.profile-chip {
+    display: inline-flex; align-items: center; gap: 11px; padding: 8px 18px;
+    background: linear-gradient(160deg, rgba(42,22,10,0.88), rgba(20,10,4,0.92));
+    border: 1px solid var(--gold-dark); border-radius: 999px; font-family: 'Cinzel', serif;
+}
+.pc-av { width: 24px; height: 24px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #6b4a30, #2a1a10); border: 1px solid var(--gold-dark); }
+.pc-id { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.pc-name { color: var(--gold-light); font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+.pc-title { font-size: 8.5px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--gold-dark); font-weight: 700; line-height: 1; }
+.pc-rating { color: #a9d4ff; font-weight: 900; font-size: 14px; }
+
+/* ladder table */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 15.5px; }
+th { font-family: 'Cinzel', serif; color: var(--gold); font-size: 12.5px; letter-spacing: 1.5px;
+    text-transform: uppercase; text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid rgba(201,168,76,0.4); }
+td { padding: 7px 10px; border-bottom: 1px solid rgba(201,168,76,0.12); color: #d8cdb4; }
+tr.milestone td { background: rgba(201,168,76,0.07); }
+td.lv { font-family: 'Cinzel', serif; font-weight: 900; color: var(--gold-light); }
+.star { color: #e8c34b; font-weight: 600; }
+.gift { color: #8fd48f; }
+.rank { font-family: 'Cinzel', serif; letter-spacing: 1px; }
+
+/* profile + victory mocks */
+.mockcard {
+    background: linear-gradient(160deg, rgba(42,22,10,0.88), rgba(20,10,4,0.92));
+    border: 1px solid var(--gold-dark); border-radius: 12px; padding: 16px 18px;
+    max-width: 480px; margin: 14px 0;
+}
+.pf-sec { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.pf-court { display: flex; align-items: center; gap: 12px; }
+.pf-plv { min-width: 34px; height: 34px; font-size: 15px; border-width: 2.5px; }
+.pf-court-main { flex: 1; }
+.pf-court-rank { display: flex; align-items: baseline; gap: 10px; }
+.pf-court-title { font-family: 'Cinzel', serif; font-weight: 900; font-size: 15px;
+    letter-spacing: 1.5px; color: var(--gold-light); }
+.pf-court-games { font-size: 11px; color: var(--parchment-dim); }
+.pf-court-track { height: 7px; margin: 6px 0 4px; border-radius: 4px;
+    background: rgba(0,0,0,0.45); border: 1px solid rgba(201,168,76,0.35); overflow: hidden; }
+.pf-court-fill { height: 100%; background: linear-gradient(90deg, #8a6a1f, #e8c34b); border-radius: 4px; }
+.pf-court-next { font-size: 11.5px; color: var(--parchment-dim); }
+.pf-court-next b { color: var(--gold-light); }
+.vs-pl-crest { font-size: 20px; color: #e8c34b; text-shadow: 0 0 10px rgba(232,195,75,0.5); }
+.vs-delta.pl { display: flex; align-items: center; gap: 10px; }
+.vs-d-what { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--gold); }
+.vs-xp-lv { font-size: 13px; margin-left: 10px; }
+.vs-d-arrow { color: var(--gold); margin: 0 4px; }
+.vs-pl-notes { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; margin-top: 3px; }
+.vs-d-stars { color: #e8c34b; }
+.vs-pl-title, .vs-pl-tint, .vs-pl-table { color: var(--parchment-dim); }
+.vs-pl-title b, .vs-pl-tint b { color: var(--gold-light); }
+
+.veto { border: 1px dashed rgba(201,168,76,0.45); border-radius: 10px; padding: 14px 18px; margin: 16px 0; }
+.veto li { margin: 6px 0 6px 18px; color: #d8cdb4; }
+.veto b { color: var(--gold-light); }
+a { color: #a9d4ff; }
+.links { text-align: center; margin-top: 40px; color: var(--parchment-dim); }
+@media (max-width: 620px) { table { font-size: 13px; } td, th { padding: 6px 6px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <h1>COURT STANDING</h1>
+    <div class="sub">The player's own level — climbed just for playing, on top of every hero's Gilt Ribbon.</div>
+    <div class="stamp">design review · branch <b>player-level</b> · 7/30 · every number below is a default for Wyatt to veto</div>
+
+    <h2>How it works</h2>
+    <p class="note">
+        Your Court Standing is derived from <b>games played</b> — the count every finished game
+        already writes. Nothing new is stored, so <b>every existing player wakes up already standing
+        on the rung their history earned</b> (a 100-game veteran logs in around Level 22, name
+        already silver). Solo and multiplayer count alike; the tutorial's guided game doesn't.
+        Star drops pay inside the same transaction as the game result, exactly once per rung.
+    </p>
+
+    <h2>The front door — the menu chip at each tier</h2>
+    <p class="note">The level roundel and the name's tint climb together every ten levels.
+        The rank sits under the name in small caps. This is the piece everyone sees on the main page.</p>
+    <div class="chip-row" id="chips"></div>
+
+    <h2>The ladder — all fifty rungs</h2>
+    <p class="note">A level a game to start, stretching to fifteen-game rungs in the forties.
+        Landmarks: Level 10 ≈ 21 games · 20 ≈ 71 · 30 ≈ 151 · 40 ≈ 251 · 50 ≈ 401.
+        Total star payout over the full climb: <b class="star">★ 220</b>.</p>
+    <table id="ladder"><thead><tr>
+        <th>Level</th><th>Games</th><th>Rank</th><th>Grants</th>
+    </tr></thead><tbody></tbody></table>
+
+    <h2>The profile — Court Standing card</h2>
+    <div class="mockcard">
+        <div class="pf-sec">Court Standing</div>
+        <div class="pf-court">
+            <span class="pc-plv pf-plv plv-bronze">12</span>
+            <div class="pf-court-main">
+                <div class="pf-court-rank">
+                    <span class="pf-court-title plv-bronze">Envoy</span>
+                    <span class="pf-court-games">31 games played</span>
+                </div>
+                <div class="pf-court-track"><div class="pf-court-fill" style="width:40%"></div></div>
+                <div class="pf-court-next">Next: <b>★ 10</b> at Level 14</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>The victory screen — only when a rung is crossed</h2>
+    <p class="note">Ordinary games stay quiet, same rule as the hero ribbon. When a game does cross
+        a rung, a slim chip appears under the hero card:</p>
+    <div class="mockcard">
+        <div class="vs-delta pl">
+            <span class="vs-pl-crest">♛</span>
+            <div>
+                <div><span class="vs-d-what">Court Standing</span>
+                    <span class="vs-xp-lv">Level <b>11</b><span class="vs-d-arrow">→</span><b>12</b></span></div>
+                <div class="vs-pl-notes">
+                    <span class="vs-pl-title">You are now <b>Envoy</b></span>
+                    <span class="vs-pl-table">The court gifts you a table — see the store</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>The free table at Level 12</h2>
+    <p class="note">
+        One of the six <b>priced base skins</b> — Crimson Velvet, The Queen's Table, Emerald Court,
+        Midnight Atlas, The Cartographer's Desk, or Alchemist's Slate — chosen by a per-account
+        deterministic shuffle, always one you haven't already bought. <b>Never a rare table</b>
+        (those stay earned by deed) and never a hero table. In the store it reads
+        <span class="gift">“✦ A gift of the court.”</span>
+    </p>
+
+    <h2>Where else the standing shows</h2>
+    <p class="note">
+        <b>Leaderboard:</b> every name wears its tint on all boards (the row already carries the
+        games count — zero schema change), with the rank as the hover tooltip.
+        <b>Not yet:</b> other seats' tints at the live multiplayer table — the seat payload doesn't
+        carry a games count today; noted as a follow-up if the tints earn their keep.
+    </p>
+
+    <h2>Defaults on the table for veto</h2>
+    <div class="veto"><ul>
+        <li><b>The curve</b> — 401 games to Level 50. Faster? Slower?</li>
+        <li><b>The twelve ranks</b> — Wanderer, Squire, Courtier, Envoy, Steward, Magistrate,
+            Ambassador, Chancellor, Viceroy, Regent, Highlord, Crownkeeper.</li>
+        <li><b>Tint tiers</b> — Bronze 10 · Silver 20 · Gold 30 · Platinum 40 · Radiant 50.</li>
+        <li><b>Star drops</b> — ★5 at 2, ★10 at 6/10/14, ★15 at 18/20/25, ★20 at 30/35,
+            ★25 at 40/45, ★50 at 50 (★220 total).</li>
+        <li><b>The table gift level</b> — 12.</li>
+        <li><b>Veterans' passed rungs don't back-pay stars</b> — they get the level, title and tint
+            instantly, but only rungs crossed from now on drop stars. (Generous alternative:
+            one-time back-pay on first game after ship.)</li>
+    </ul></div>
+
+    <div class="links">
+        Play the build: <a href="index.html">the game with Court Standing live</a> ·
+        <a href="showcase.html">reward showcase (7/29)</a>
+    </div>
+</div>
+
+<script>
+// The same curve/tables as js/meta.js — small copies so this page states
+// the real numbers, not approximations.
+const plStep = n => n <= 2 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : n <= 19 ? 5 : n <= 29 ? 8 : n <= 39 ? 10 : 15;
+const CUM = [0]; for (let n = 1; n < 50; n++) CUM.push(CUM[n-1] + plStep(n));
+const TITLES = [[1,'Wanderer'],[4,'Squire'],[8,'Courtier'],[12,'Envoy'],[16,'Steward'],[20,'Magistrate'],
+    [25,'Ambassador'],[30,'Chancellor'],[35,'Viceroy'],[40,'Regent'],[45,'Highlord'],[50,'Crownkeeper']];
+const STARS = {2:5,6:10,10:10,14:10,18:15,20:15,25:15,30:20,35:20,40:25,45:25,50:50};
+const TINTS = {10:['plv-bronze','Bronze name'],20:['plv-silver','Silver name'],30:['plv-gold','Gold name'],
+    40:['plv-plat','Platinum name'],50:['plv-radiant','Radiant name']};
+const title = l => { let t = 'Wanderer'; for (const [lv,name] of TITLES) if (l >= lv) t = name; return t; };
+const tintCls = l => l>=50?'plv-radiant':l>=40?'plv-plat':l>=30?'plv-gold':l>=20?'plv-silver':l>=10?'plv-bronze':'';
+
+// menu chips at the six tiers
+document.getElementById('chips').innerHTML = [1,10,20,30,40,50].map(l => `
+    <div class="profile-chip">
+        <span class="pc-av"></span>
+        <span class="pc-plv ${tintCls(l)}">${l}</span>
+        <span class="pc-id">
+            <span class="pc-name ${tintCls(l)}">Wyatt</span>
+            <span class="pc-title">${title(l)}</span>
+        </span>
+        <span class="pc-rating">✦ 1.42</span>
+    </div>`).join('');
+
+// the full ladder
+document.querySelector('#ladder tbody').innerHTML =
+    Array.from({length: 50}, (_, i) => i + 1).map(l => {
+        const grants = [];
+        if (STARS[l]) grants.push(`<span class="star">★ ${STARS[l]}</span>`);
+        if (l === 12) grants.push('<span class="gift">A free table — “a gift of the court”</span>');
+        const tRow = TITLES.find(t => t[0] === l && l > 1);
+        if (tRow) grants.push(`<span class="rank">the rank of ${tRow[1]}</span>`);
+        if (TINTS[l]) grants.push(`<span class="${TINTS[l][0]}">${TINTS[l][1]}</span>`);
+        const milestone = grants.length > 0;
+        return `<tr${milestone ? ' class="milestone"' : ''}>
+            <td class="lv">${l}</td><td>${CUM[l-1]}</td>
+            <td class="rank ${tintCls(l)}">${title(l)}</td>
+            <td>${grants.join(' · ') || '<span style="color:#6a5c44">—</span>'}</td></tr>`;
+    }).join('');
+</script>
+</body>
+</html>
