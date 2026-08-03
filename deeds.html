@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <link rel="icon" type="image/png" href="assets/ui/favicon-serpent.png">
+    <link rel="apple-touch-icon" href="assets/ui/favicon-serpent.png">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; }
+        h1, h2, h3, p, table { margin: 0; }
+        button { font: inherit; }
+    </style>
+    <title>The Ledger of Deeds — FAVOR achievements, a plan</title>
+
+<style>
+:root {
+    --ground: #150e07;
+    --panel: #1e150c;
+    --panel-2: #241a0f;
+    --rule: rgba(201, 165, 66, 0.20);
+    --rule-soft: rgba(201, 165, 66, 0.10);
+    --gold: #c9a542;
+    --gold-light: #f0dfb8;
+    --gold-dim: #9a8047;
+    --ink: #e8dcc4;
+    --ink-soft: #b7a684;
+    --ink-faint: #8d7c5d;
+
+    --t-bronze: #c08a52;
+    --t-silver: #bcc3cb;
+    --t-gold: #e8c34b;
+    --t-plat: #8fd0e0;
+    --t-legend: #c98cff;
+
+    --w1: #7fb069;
+    --w2: #e0a33e;
+    --w3: #cf7b6a;
+
+    --display: Baskerville, "Hoefler Text", "Palatino Linotype", Palatino, Georgia, serif;
+    --body: "Iowan Old Style", Charter, Georgia, "Times New Roman", serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --ground: #e9dcbe;
+        --panel: #f1e6cd;
+        --panel-2: #e4d5b3;
+        --rule: rgba(90, 62, 16, 0.28);
+        --rule-soft: rgba(90, 62, 16, 0.13);
+        --gold: #7d5c14;
+        --gold-light: #513a08;
+        --gold-dim: #8b7440;
+        --ink: #2b1e0f;
+        --ink-soft: #5a472c;
+        --ink-faint: #7d6a4b;
+
+        --t-bronze: #8a5722;
+        --t-silver: #5c6874;
+        --t-gold: #8a6a10;
+        --t-plat: #1d6b80;
+        --t-legend: #6a3a9c;
+
+        --w1: #3f6b2c;
+        --w2: #8a5c11;
+        --w3: #92402f;
+    }
+}
+:root[data-theme="dark"] {
+    --ground: #150e07; --panel: #1e150c; --panel-2: #241a0f;
+    --rule: rgba(201, 165, 66, 0.20); --rule-soft: rgba(201, 165, 66, 0.10);
+    --gold: #c9a542; --gold-light: #f0dfb8; --gold-dim: #9a8047;
+    --ink: #e8dcc4; --ink-soft: #b7a684; --ink-faint: #8d7c5d;
+    --t-bronze: #c08a52; --t-silver: #bcc3cb; --t-gold: #e8c34b;
+    --t-plat: #8fd0e0; --t-legend: #c98cff;
+    --w1: #7fb069; --w2: #e0a33e; --w3: #cf7b6a;
+}
+:root[data-theme="light"] {
+    --ground: #e9dcbe; --panel: #f1e6cd; --panel-2: #e4d5b3;
+    --rule: rgba(90, 62, 16, 0.28); --rule-soft: rgba(90, 62, 16, 0.13);
+    --gold: #7d5c14; --gold-light: #513a08; --gold-dim: #8b7440;
+    --ink: #2b1e0f; --ink-soft: #5a472c; --ink-faint: #7d6a4b;
+    --t-bronze: #8a5722; --t-silver: #5c6874; --t-gold: #8a6a10;
+    --t-plat: #1d6b80; --t-legend: #6a3a9c;
+    --w1: #3f6b2c; --w2: #8a5c11; --w3: #92402f;
+}
+
+body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+}
+.wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 52px;
+}
+
+/* ── masthead ─────────────────────────────────────────── */
+.mast { display: flex; flex-direction: column; gap: 14px; }
+.eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+}
+h1 {
+    font-family: var(--display);
+    font-size: clamp(34px, 6vw, 52px);
+    font-weight: 400;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    line-height: 1.1;
+    text-wrap: balance;
+    margin: 0;
+}
+.standfirst {
+    font-size: 18.5px;
+    color: var(--ink-soft);
+    max-width: 64ch;
+}
+.standfirst b { color: var(--ink); font-weight: 600; }
+.mast-rule {
+    height: 2px;
+    background: linear-gradient(90deg, var(--gold), var(--rule) 60%, transparent);
+}
+
+/* ── generic section ──────────────────────────────────── */
+section { display: flex; flex-direction: column; gap: 20px; }
+h2 {
+    font-family: var(--display);
+    font-size: 25px;
+    font-weight: 400;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin: 0;
+    padding-bottom: 9px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+h2 .h2-note {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+h3 {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 400;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0;
+}
+p { margin: 0; max-width: 68ch; }
+.prose { display: flex; flex-direction: column; gap: 14px; }
+strong { color: var(--gold-light); font-weight: 600; }
+em { color: var(--ink); }
+
+/* ── the three jobs ───────────────────────────────────── */
+.jobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr)); gap: 16px; }
+.job {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-top: 2px solid var(--gold);
+    padding: 18px 18px 20px;
+    display: flex; flex-direction: column; gap: 8px;
+}
+.job h3 { font-size: 15px; }
+.job p { font-size: 15px; color: var(--ink-soft); }
+
+/* ── chapters + deeds ─────────────────────────────────── */
+.chapter { display: flex; flex-direction: column; gap: 0; }
+.chapter-head {
+    display: flex; align-items: baseline; gap: 14px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--rule);
+    flex-wrap: wrap;
+}
+.chapter-letter {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.1em; color: var(--ground);
+    background: var(--gold);
+    padding: 3px 9px 4px;
+}
+.chapter-title {
+    font-family: var(--display); font-size: 22px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--gold-light);
+}
+.chapter-sub { font-size: 15px; color: var(--ink-faint); font-style: italic; }
+
+.deed {
+    display: grid;
+    grid-template-columns: 46px 1fr 210px;
+    gap: 4px 16px;
+    padding: 15px 0 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    align-items: start;
+}
+.deed:hover { background: var(--panel); }
+.num {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    color: var(--gold); padding-top: 3px; font-variant-numeric: tabular-nums;
+}
+.deed-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.deed-name {
+    font-family: var(--display); font-size: 18px; letter-spacing: 0.05em;
+    color: var(--ink);
+}
+.deed-desc { font-size: 15.5px; color: var(--ink-soft); max-width: 56ch; }
+.deed-why { font-size: 14px; color: var(--ink-faint); font-style: italic; max-width: 56ch; }
+.deed-meta {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end;
+    padding-top: 4px;
+}
+
+.chip {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 3px 8px 4px;
+    border: 1px solid currentColor; white-space: nowrap;
+}
+.t-bronze { color: var(--t-bronze); }
+.t-silver { color: var(--t-silver); }
+.t-gold { color: var(--t-gold); }
+.t-plat { color: var(--t-plat); }
+.t-legend { color: var(--t-legend); }
+.pay {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--gold-light); background: var(--panel-2);
+    border: 1px solid var(--rule); padding: 3px 8px 4px; white-space: nowrap;
+}
+.wave {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em;
+    padding: 3px 8px 4px; white-space: nowrap; border: 1px dashed currentColor;
+}
+.wave-1 { color: var(--w1); }
+.wave-2 { color: var(--w2); }
+.wave-3 { color: var(--w3); }
+
+/* ── sealed (secret) deeds ────────────────────────────── */
+.seal-btn {
+    grid-column: 2 / -1;
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel-2); border: 1px dashed var(--rule);
+    color: var(--gold-dim); font-family: var(--mono); font-size: 12px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 13px 16px; cursor: pointer; text-align: left; width: 100%;
+}
+.seal-btn:hover, .seal-btn:focus-visible {
+    color: var(--gold-light); border-color: var(--gold);
+    outline: none;
+}
+.seal-dot {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 32%, #a33b3b, #5e1a1a 72%);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4) inset;
+    flex: none;
+}
+.sealed .deed-main, .sealed .deed-meta { display: none; }
+.sealed.open .deed-main, .sealed.open .deed-meta { display: flex; }
+.sealed.open .seal-btn { display: none; }
+.sealed.open .deed-main { animation: rise 260ms ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sealed.open .deed-main { animation: none; } }
+
+/* ── legend + tables ──────────────────────────────────── */
+.legend {
+    background: var(--panel); border: 1px solid var(--rule);
+    padding: 20px 20px 22px; display: flex; flex-direction: column; gap: 13px;
+}
+.legend-row { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.legend-row p { font-size: 14.5px; color: var(--ink-soft); max-width: 62ch; }
+
+.scroller { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 460px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+th {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--gold-dim); font-weight: 400;
+    border-bottom: 1px solid var(--rule);
+}
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--gold-light); white-space: nowrap; }
+
+/* ── questions ────────────────────────────────────────── */
+.q {
+    background: var(--panel); border-left: 3px solid var(--gold);
+    padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px;
+}
+.q-title { font-family: var(--display); font-size: 17.5px; letter-spacing: 0.05em; color: var(--gold-light); }
+.q p { font-size: 15.5px; color: var(--ink-soft); }
+.q .rec { font-size: 15px; color: var(--ink); }
+.q .rec b { color: var(--gold-light); }
+.qs { display: flex; flex-direction: column; gap: 14px; }
+
+.foot {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-faint);
+    border-top: 1px solid var(--rule); padding-top: 18px;
+}
+
+@media (max-width: 720px) {
+    .deed { grid-template-columns: 38px 1fr; }
+    .deed-meta { grid-column: 2; justify-content: flex-start; }
+    .seal-btn { grid-column: 2; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header class="mast">
+    <div class="eyebrow">FAVOR · design plan · 3 August 2026</div>
+    <h1>The Ledger of Deeds</h1>
+    <div class="mast-rule"></div>
+    <p class="standfirst">Forty-eight achievement ideas for FAVOR, grouped into eight chapters.
+    Every one carries a number — <b>point at the numbers you want</b> and I'll build those.
+    Each also carries what it pays the player and what it costs us to build, because a
+    deed that needs the engine to notice something new is a different job from one that
+    ships tonight.</p>
+</header>
+
+<section>
+    <h2>The vision <span class="h2-note">why the game wants these</span></h2>
+    <div class="jobs">
+        <div class="job">
+            <h3>A tutorial in disguise</h3>
+            <p>Most players will never borrow a skill from three rivals, never turn a board
+            to Side B, never find out gold can go negative. A deed is a dare that teaches
+            the mechanic without a single line of instruction.</p>
+        </div>
+        <div class="job">
+            <h3>A reason for the next game</h3>
+            <p>Court Standing rewards playing at all. Hero levels reward playing one hero.
+            Deeds reward playing <em>differently</em> — a hero you avoid, a strategy you'd never
+            risk, a chapter of the Almanac that's still blank.</p>
+        </div>
+        <div class="job">
+            <h3>A trophy for the story</h3>
+            <p>The funniest games are the disasters. Right now the game says nothing when
+            you finish on minus fourteen. It should hand you a medal, and you should want
+            to show somebody.</p>
+        </div>
+    </div>
+    <div class="prose">
+        <p><strong>Where they live.</strong> The plumbing already exists and works: a deed is a
+        pure <code>check()</code> against a snapshot of your seat, it grants inside the same
+        transaction that pays the stars, and it can never pay twice. The gallery on the
+        title screen and the unlock ceremony at game over are built. What's missing is the
+        <em>content</em> — and one new home: the collection deeds belong in the Almanac, printed
+        on the chapter tabs, where a player already sees "18 of 30 discovered" and feels
+        the gap.</p>
+    </div>
+</section>
+
+<section>
+    <h2>How to read a deed</h2>
+    <div class="legend">
+        <div class="legend-row">
+            <span class="chip t-bronze">Bronze</span>
+            <span class="chip t-silver">Silver</span>
+            <span class="chip t-gold">Gold</span>
+            <span class="chip t-plat">Platinum</span>
+            <span class="chip t-legend">Legendary</span>
+            <p>The existing five tiers. Tier isn't stored — it falls out of the star value,
+            so it stays one number in the data.</p>
+        </div>
+        <div class="legend-row">
+            <span class="pay">★ 20</span>
+            <span class="pay">✦ rare table</span>
+            <span class="pay">✦ crest</span>
+            <p>What the player is paid. Stars buy heroes and tables; a <em>cosmetic</em> payout
+            costs the economy nothing — see the note under the chapters.</p>
+        </div>
+        <div class="legend-row">
+            <span class="wave wave-1">wave 1</span>
+            <p>Ships with today's snapshot. Data-file only — no engine work, no risk.</p>
+        </div>
+        <div class="legend-row">
+            <span class="wave wave-2">wave 2</span>
+            <p>Needs the game to notice one more thing at game over (a final score, a card
+            type, a slot). Small, contained additions to the seat snapshot.</p>
+        </div>
+        <div class="legend-row">
+            <span class="wave wave-3">wave 3</span>
+            <p>Needs the Almanac to be readable by the deed engine — and, if you want these
+            to survive a new phone, synced to the player's record rather than living only
+            in the browser.</p>
+        </div>
+    </div>
+</section>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">A</span>
+        <span class="chapter-title">The Almanac</span>
+        <span class="chapter-sub">filling the book — your idea, taken all the way</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">A1</div>
+        <div class="deed-main">
+            <div class="deed-name">First Light</div>
+            <div class="deed-desc">Record your first entry in the Almanac.</div>
+            <div class="deed-why">Its real job is telling players the book exists at all.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">A2</div>
+        <div class="deed-main">
+            <div class="deed-name">The First Chapter</div>
+            <div class="deed-desc">Discover all thirty Act I cards.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">A3</div>
+        <div class="deed-main">
+            <div class="deed-name">The Second Chapter</div>
+            <div class="deed-desc">Discover all thirty Act II cards.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">A4</div>
+        <div class="deed-main">
+            <div class="deed-name">The Third Chapter</div>
+            <div class="deed-desc">Discover all thirty Act III cards.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">A5</div>
+        <div class="deed-main">
+            <div class="deed-name">The Six Shelves</div>
+            <div class="deed-desc">One deed per card type — the Armory (14 weapons), the
+            Apothecary (11 potions), the Reliquary (8 artifacts), the Wanderer's Road
+            (26 adventures), the Ledger of Endeavors (19), the Library (12 wisdoms).</div>
+            <div class="deed-why">Six deeds, deliberately uneven: the Reliquary falls in a
+            few nights, the Wanderer's Road takes months.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver ×6</span><span class="pay">★ 15 each</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">A6</div>
+        <div class="deed-main">
+            <div class="deed-name">The Mission Roll</div>
+            <div class="deed-desc">Complete all thirty-six missions across your games.</div>
+            <div class="deed-why">Completed, not merely seen — the hardest honest grind in the game.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="pay">✦ rare table</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">A7</div>
+        <div class="deed-main">
+            <div class="deed-name">Bound in Full</div>
+            <div class="deed-desc">Every card and every mission in the Almanac. The whole book.</div>
+            <div class="deed-why">The game's ceiling. Nobody should reach it this year.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="pay">★ 200</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">B</span>
+        <span class="chapter-title">Rituals of the Hand</span>
+        <span class="chapter-sub">the same card, again and again — and the shape of one game</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">B1</div>
+        <div class="deed-main">
+            <div class="deed-name">A Familiar Hand</div>
+            <div class="deed-desc">Play any one card five times across your games.</div>
+            <div class="deed-why">The Almanac already counts every play, so "five times" needs no new counter.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">B2</div>
+        <div class="deed-main">
+            <div class="deed-name">Ritual of Ten</div>
+            <div class="deed-desc">Play the same card ten times.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-3">wave 3</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">B3</div>
+        <div class="deed-main">
+            <div class="deed-name">The Full Court</div>
+            <div class="deed-desc">Play a card of every type in a single game — endeavor,
+            weapon, artifact, adventure, potion and wisdom.</div>
+            <div class="deed-why">Actively fights the way people build. That's the point.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">B4</div>
+        <div class="deed-main">
+            <div class="deed-name">The Reliquary Hoard</div>
+            <div class="deed-desc">Hold three Artifacts on your field at once.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">B5</div>
+        <div class="deed-main">
+            <div class="deed-name">Bristling</div>
+            <div class="deed-desc">Hold five Weapons on your field at once.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">B6</div>
+        <div class="deed-main">
+            <div class="deed-name">Nothing Left to Play</div>
+            <div class="deed-desc">Finish a game with an empty hand.</div>
+            <div class="deed-why">Quietly teaches that discarding for gold is a real option.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">C</span>
+        <span class="chapter-title">Ruin &amp; Comedy</span>
+        <span class="chapter-sub">your negative-score idea, and its whole unhappy family</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">C1</div>
+        <div class="deed-main">
+            <div class="deed-name">In the Red</div>
+            <div class="deed-desc">Finish a game with a negative final score.</div>
+            <div class="deed-why">Scorn counts double against you, so this is reachable — and right now
+            the game says nothing when it happens.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">C2</div>
+        <div class="deed-main">
+            <div class="deed-name">The Scorned</div>
+            <div class="deed-desc">End a game carrying ten Scorn.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">C3</div>
+        <div class="deed-main">
+            <div class="deed-name">Rock Bottom</div>
+            <div class="deed-desc">Finish last, in the negative, with no gold left.</div>
+            <div class="deed-why">The full disaster. Worth a louder ceremony than a win.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">C4</div>
+        <div class="deed-main">
+            <div class="deed-name">Debtor's Prison</div>
+            <div class="deed-desc">End a game owing gold.</div>
+            <div class="deed-why">Gold genuinely has no floor — one card makes every rival pay
+            whether they can afford it or not. A bug-shaped quirk, turned into a trophy.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">C5</div>
+        <div class="deed-main">
+            <div class="deed-name">The Pauper King</div>
+            <div class="deed-desc">Win with the least gold at the table.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">C6</div>
+        <div class="deed-main">
+            <div class="deed-name">Photo Finish</div>
+            <div class="deed-desc">Win a game decided on the gold tiebreaker.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">C7</div>
+        <div class="deed-main">
+            <div class="deed-name">The Long Road Back</div>
+            <div class="deed-desc">Win after entering Act III in last place.</div>
+            <div class="deed-why">Needs one reading of the table taken at the act change.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 40</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">D</span>
+        <span class="chapter-title">Mastery</span>
+        <span class="chapter-sub">the numbers going somewhere absurd</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">D1</div>
+        <div class="deed-main">
+            <div class="deed-name">The Renaissance Heir</div>
+            <div class="deed-desc">Reach five in all six skills in one game.</div>
+            <div class="deed-why">The counterweight to the six existing "reach 10 of one skill" deeds:
+            those reward a spike, this rewards breadth.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 40</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">D2</div>
+        <div class="deed-main">
+            <div class="deed-name">Twin Peaks</div>
+            <div class="deed-desc">Reach ten in two different skills in one game.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">D3</div>
+        <div class="deed-main">
+            <div class="deed-name">The Juggernaut</div>
+            <div class="deed-desc">Reach fifteen Power in a single game.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">D4</div>
+        <div class="deed-main">
+            <div class="deed-name">The King's Purse</div>
+            <div class="deed-desc">Hold fifty Gold at once.</div>
+            <div class="deed-why">A ceiling above the existing thirty-gold deed.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">D5</div>
+        <div class="deed-main">
+            <div class="deed-name">A Reign of Legend</div>
+            <div class="deed-desc">Win with a final score over one hundred.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 40</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">D6</div>
+        <div class="deed-main">
+            <div class="deed-name">Unbroken</div>
+            <div class="deed-desc">Win three games in a row.</div>
+            <div class="deed-why">Your best streak is already stored on the record — this is nearly free.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">D7</div>
+        <div class="deed-main">
+            <div class="deed-name">The Dynasty</div>
+            <div class="deed-desc">Win ten games in a row.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">E</span>
+        <span class="chapter-title">Service to the Realm</span>
+        <span class="chapter-sub">missions, and the ways they're won</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">E1</div>
+        <div class="deed-main">
+            <div class="deed-name">Servant of Three Acts</div>
+            <div class="deed-desc">Complete a mission in every act of one game.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">E2</div>
+        <div class="deed-main">
+            <div class="deed-name">A Perfect Record</div>
+            <div class="deed-desc">Complete every mission you accepted — at least three, none failed.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">E3</div>
+        <div class="deed-main">
+            <div class="deed-name">The Whole Court Helped</div>
+            <div class="deed-desc">Complete a mission using borrowed skill from three different rivals.</div>
+            <div class="deed-why">Borrowing is the most misunderstood rule in the game. A deed is
+            the cheapest way to teach it — and it pairs with the "why can't I borrow?"
+            copy fix that's still parked.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">E4</div>
+        <div class="deed-main">
+            <div class="deed-name">Out of the Maze</div>
+            <div class="deed-desc">Complete The Labyrinth.</div>
+            <div class="deed-why">The game already has a secret for <em>failing</em> it. It should
+            have one for beating it.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">E5</div>
+        <div class="deed-main">
+            <div class="deed-name">Prompt Service</div>
+            <div class="deed-desc">Turn a mission in on the very round it activates.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">F</span>
+        <span class="chapter-title">Heroes &amp; Boards</span>
+        <span class="chapter-sub">the ten faces, and the sides nobody turns</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">F1</div>
+        <div class="deed-main">
+            <div class="deed-name">The Other Face</div>
+            <div class="deed-desc">Unlock Side B on any hero.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">F2</div>
+        <div class="deed-main">
+            <div class="deed-name">The Turned Card</div>
+            <div class="deed-desc">Win a game playing a Side B board.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">F3</div>
+        <div class="deed-main">
+            <div class="deed-name">Ten Faces</div>
+            <div class="deed-desc">Unlock Side B on all ten heroes.</div>
+            <div class="deed-why">Sits above The Master as the roster's true completion.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="pay">✦ rare table</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">F4</div>
+        <div class="deed-main">
+            <div class="deed-name">Know Every Face</div>
+            <div class="deed-desc">Play a game as each of the ten heroes — winning optional.</div>
+            <div class="deed-why">The gentle cousin of The Master: it asks for curiosity, not skill.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">F5</div>
+        <div class="deed-main">
+            <div class="deed-name">Natural Talent</div>
+            <div class="deed-desc">Win the first game you ever play with a hero.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">F6</div>
+        <div class="deed-main">
+            <div class="deed-name">To the End of the Track</div>
+            <div class="deed-desc">Finish a game standing on your board's final slot.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">G</span>
+        <span class="chapter-title">The Table</span>
+        <span class="chapter-sub">rivals, real people, and the daily board</span>
+    </div>
+
+    <div class="deed">
+        <div class="num">G1</div>
+        <div class="deed-main">
+            <div class="deed-name">Against the Field</div>
+            <div class="deed-desc">Win a five-player game.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">G2</div>
+        <div class="deed-main">
+            <div class="deed-name">First Among Peers</div>
+            <div class="deed-desc">Win a game against another human.</div>
+            <div class="deed-why">The table already knows how many humans were seated.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">G3</div>
+        <div class="deed-main">
+            <div class="deed-name">Bounty Collected</div>
+            <div class="deed-desc">Finish ahead of the day's WANTED rival.</div>
+            <div class="deed-why">The WANTED plaque already pays stars for this — the deed makes it memorable.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">G4</div>
+        <div class="deed-main">
+            <div class="deed-name">The Regulars</div>
+            <div class="deed-desc">Play ten games with other people at the table.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed">
+        <div class="num">G5</div>
+        <div class="deed-main">
+            <div class="deed-name">The Perennial</div>
+            <div class="deed-desc">Be crowned Champion of the Day twenty-five times.</div>
+            <div class="deed-why">A long ceiling above the existing five-crown deed.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-1">wave 1</span></div>
+    </div>
+</div>
+
+<div class="chapter">
+    <div class="chapter-head">
+        <span class="chapter-letter">H</span>
+        <span class="chapter-title">Sealed Deeds</span>
+        <span class="chapter-sub">hidden in the gallery until they fire — the name is the reward. Break a seal to read it.</span>
+    </div>
+
+    <div class="deed sealed">
+        <div class="num">H1</div>
+        <button class="seal-btn" type="button"><span class="seal-dot"></span> Sealed · break to read</button>
+        <div class="deed-main">
+            <div class="deed-name">The Devil Went Down</div>
+            <div class="deed-desc">Complete the Golden Fiddle mission playing as the Fiddler.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed sealed">
+        <div class="num">H2</div>
+        <button class="seal-btn" type="button"><span class="seal-dot"></span> Sealed · break to read</button>
+        <div class="deed-main">
+            <div class="deed-name">Bandit's Honor</div>
+            <div class="deed-desc">Win as the Bandit without stealing a single point of prestige.</div>
+            <div class="deed-why">Refusing your own board's best move.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed sealed">
+        <div class="num">H3</div>
+        <button class="seal-btn" type="button"><span class="seal-dot"></span> Sealed · break to read</button>
+        <div class="deed-main">
+            <div class="deed-name">The Long Way Round</div>
+            <div class="deed-desc">Reach Reunited the honest way — Her Lost Father, then Finding
+            the Lost Corridor, then the reunion itself, all in one game.</div>
+            <div class="deed-why">A private nod to the map-chain exploit we closed in July.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed sealed">
+        <div class="num">H4</div>
+        <button class="seal-btn" type="button"><span class="seal-dot"></span> Sealed · break to read</button>
+        <div class="deed-main">
+            <div class="deed-name">The Doctor Is In</div>
+            <div class="deed-desc">Take the Doctor's free potion in all three acts of one game.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+
+    <div class="deed sealed">
+        <div class="num">H5</div>
+        <button class="seal-btn" type="button"><span class="seal-dot"></span> Sealed · break to read</button>
+        <div class="deed-main">
+            <div class="deed-name">Winter of the Court</div>
+            <div class="deed-desc">Lose a game in which you completed no mission and played no card
+            onto your board.</div>
+            <div class="deed-why">Somebody, somewhere, will rage-idle a whole game. Reward them.</div>
+        </div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+    </div>
+</div>
+
+<section>
+    <h2>The economy problem <span class="h2-note">read this before picking</span></h2>
+    <div class="prose">
+        <p>Stars are real money now. The Mint sells them, the store spends them at ★100 a hero,
+        and every deed that pays stars is inventory given away. Today's ledger stands at
+        <strong>570★ from deeds</strong> against the <strong>500★</strong> needed to buy the
+        five locked heroes — deliberately tuned so a devoted player can earn the roster.
+        Court Standing has since added another <strong>220★</strong> on top.</p>
+        <p>Priced as written above, this ledger adds <strong>1,530★</strong> — nearly triple
+        today's whole offering, and the store would stop mattering. Two levers, and I'd
+        pull both:</p>
+    </div>
+    <div class="scroller">
+        <table>
+            <thead><tr><th>Lever</th><th>What it means</th><th>Effect</th></tr></thead>
+            <tbody>
+                <tr><td>A flatter scale for new deeds</td><td>Bronze 5★, Silver 10★, Gold 15★. Existing deeds keep their prices — nobody's ledger gets devalued.</td><td class="n">1,530★ → 495★</td></tr>
+                <tr><td>Cosmetics at the top</td><td>Every Platinum and Legendary pays a <em>rare table</em>, a crest or a name tint instead of stars. The three rare tables already carry a lock marked <span style="font-family:var(--mono);font-size:13px">'feat'</span> — waiting since July for exactly this system.</td><td class="n">included above</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="prose">
+        <p>That's still <strong>495★</strong> if all forty-eight ship at once — which is the real
+        argument for shipping about twenty first (question 3 below). Twenty capped deeds land
+        near <strong>200★</strong>: generous, survivable, and re-tunable before the rest follow.
+        The cosmetic payouts cost the economy nothing and finally give the rare tables the
+        acquisition story they've never had.</p>
+    </div>
+</section>
+
+<section>
+    <h2>What it costs to build</h2>
+    <div class="scroller">
+        <table>
+            <thead><tr><th>Wave</th><th>Deeds</th><th>Work</th><th>Risk</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td class="n">1</td>
+                    <td class="n">10</td>
+                    <td>Data file only. Every check runs against the snapshot the game already builds.</td>
+                    <td>None. Nothing outside <span style="font-family:var(--mono);font-size:13px">data/achievements.js</span> changes.</td>
+                </tr>
+                <tr>
+                    <td class="n">2</td>
+                    <td class="n">29</td>
+                    <td>Widen the seat snapshot: final score, gold at the end, card types played,
+                    field contents, slot position, act-three standing, a few mission facts.
+                    All read-only reads at game over.</td>
+                    <td>Low. The snapshot is built in one function; a bad field yields a
+                    check that never fires, not a broken game.</td>
+                </tr>
+                <tr>
+                    <td class="n">3</td>
+                    <td class="n">9</td>
+                    <td>Teach the deed engine to read the Almanac, and decide whether the
+                    Almanac starts syncing to the player's record.</td>
+                    <td>Real. See the first question below.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section>
+    <h2>Three decisions I need from you</h2>
+    <div class="qs">
+        <div class="q">
+            <div class="q-title">1 · Does the Almanac follow the player, or the phone?</div>
+            <p>The book lives in the browser's storage on one device. Play on your phone and
+            your laptop and you have two half-books; reinstall the app and the collection is
+            gone. Every deed in chapter A inherits that.</p>
+            <p class="rec"><b>My recommendation:</b> sync the Almanac to the player record before we
+            ship any collection deed — the same row, the same transaction pattern the
+            achievements already use. It's the difference between a collection worth keeping
+            and one that quietly evaporates. It also means chapter A can't ship in the first pass.</p>
+        </div>
+        <div class="q">
+            <div class="q-title">2 · Do disasters celebrate as loudly as victories?</div>
+            <p>Today an unlock is a gold card with a fanfare. "Rock Bottom" arriving in the
+            same gold frame is funny once and wrong twice.</p>
+            <p class="rec"><b>My recommendation:</b> a second frame for ruin — cracked, ash-grey,
+            its own sound. Cheap to build, and it's the thing people will screenshot.</p>
+        </div>
+        <div class="q">
+            <div class="q-title">3 · How many deeds ship in the first pass?</div>
+            <p>All forty-six at once means a returning player unlocks a dozen in one game and
+            feels nothing for any of them.</p>
+            <p class="rec"><b>My recommendation:</b> wave 1 and the sharpest half of wave 2 —
+            around twenty — then watch what actually fires before adding the rest.</p>
+        </div>
+    </div>
+</section>
+
+<div class="foot">Pick by number · 48 ideas · A1–A7 · B1–B6 · C1–C7 · D1–D7 · E1–E5 · F1–F6 · G1–G5 · H1–H5</div>
+
+</div>
+
+<script>
+    document.querySelectorAll('.seal-btn').forEach(function (b) {
+        b.addEventListener('click', function () {
+            b.closest('.sealed').classList.add('open');
+        });
+    });
+</script>
+
+</body>
+</html>
