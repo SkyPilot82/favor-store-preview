@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- ═══════════════════════════════════════════════════════════════════
+     THE LEDGER OF DEEDS — player-experience preview (Skylar, 8/3)
+     Everything a player will actually SEE, rendered with the REAL game
+     stylesheet so what's approved here is what ships:
+       · the full gallery — 24 existing achievements + the 50 new deeds
+         (A5 unfolds into its six shelves, so 55 new cells)
+       · tap ANY deed to fire its ceremony — gold, or the new cracked
+         ash-grey RUIN frame for the disasters, each with its own sound
+       · the no-account dialog in both flavors (web sign-in / iOS seal)
+       · toggles: reveal sealed · mark all earned · sound
+     Data here is a REVIEW COPY of the plan (deeds.html) — the shipping
+     source of truth will be data/achievements.js with an explicit rank.
+     ═══════════════════════════════════════════════════════════════════ -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>The Ledger of Deeds — player preview</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="assets/ui/favicon-serpent.png">
+    <style>
+        html, body { margin: 0; background: #150e07; }
+        body { font-family: 'EB Garamond', serif; color: #e8dcc4; }
+
+        /* ── preview chrome (not game UI) ─────────────────────────── */
+        .pv-wrap { max-width: 960px; margin: 0 auto; padding: 30px 16px 80px; }
+        .pv-head { text-align: center; margin-bottom: 18px; }
+        .pv-title {
+            font-family: 'Cinzel', serif; font-weight: 700; font-size: 26px;
+            letter-spacing: 4px; text-transform: uppercase; color: #f0dfb8;
+        }
+        .pv-sub { font-size: 14px; color: #a8926a; font-style: italic; margin-top: 4px; }
+        .pv-rail {
+            display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+            margin: 16px 0 22px;
+        }
+        .pv-btn {
+            font-family: 'Cinzel', serif; font-weight: 700; font-size: 11px;
+            letter-spacing: 1.5px; text-transform: uppercase;
+            padding: 8px 14px; cursor: pointer; border-radius: 4px;
+            border: 1px solid #8a6a1f; color: #d8c48e;
+            background: linear-gradient(135deg, rgba(201,168,76,.14), rgba(201,168,76,.04));
+        }
+        .pv-btn:hover { border-color: #c9a542; color: #f0dfb8; }
+        .pv-btn.on { background: #c9a542; color: #241a0f; border-color: #c9a542; }
+        .pv-btn.ruinbtn { border-color: #5d6265; color: #b7bdbf; background: linear-gradient(135deg, rgba(140,146,150,.14), rgba(140,146,150,.04)); }
+        .pv-btn.ruinbtn:hover { border-color: #9aa0a3; color: #dfe3e5; }
+        .pv-note { text-align: center; font-size: 13px; color: #8d7c5d; font-style: italic; margin-bottom: 18px; }
+
+        /* the gallery panel rendered INLINE for browsing */
+        .pv-gallery .ach-inner { position: static; width: auto; max-height: none; }
+        .pv-gallery .ach-inner::after { display: none; }
+        .pv-gallery .ach-grid { overflow: visible; }
+        .pv-chap {
+            flex: 1 1 100%; margin: 14px 2px 0;
+            font-family: 'Cinzel', serif; font-size: 12px; font-weight: 700;
+            letter-spacing: 2.5px; text-transform: uppercase; color: #b39a6a;
+            border-bottom: 1px solid #3a2d17; padding-bottom: 5px;
+            display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+        }
+        .pv-chap i { font-family: 'EB Garamond', serif; font-style: italic; font-weight: 400;
+            font-size: 12px; letter-spacing: 0; text-transform: none; color: #8d7c5d; }
+        .ach-cell { cursor: pointer; }
+        .ach-cell:focus-visible { outline: 2px solid #c9a542; outline-offset: 2px; }
+
+        /* ── THE RUIN FRAME — cracked, ash-grey, the disaster's own ── */
+        .ach-ruined { --tc: #b7bdbf; --tc2: #565c5f; }
+        .ach-card.ach-ruined {
+            background: linear-gradient(#26262a, #121215);
+            border-color: #6f7578;
+            box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 18px 60px rgba(0,0,0,.75),
+                        0 0 34px -10px #9aa0a3;
+        }
+        /* the fissure: one jagged crack from the lip through the seal's shoulder */
+        .ach-card.ach-ruined::before {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: linear-gradient(170deg, transparent 0%, rgba(0,0,0,.55) 0%);
+            clip-path: polygon(58% 0, 60.5% 0, 54% 18%, 58% 19%, 49% 43%, 52.5% 44%, 44% 71%, 46% 71.5%, 41% 100%, 39.5% 100%, 44.5% 71%, 42.5% 70.5%, 51% 43.5%, 47.5% 42.5%, 56.5% 18.5%, 52.5% 17.5%);
+        }
+        .ach-card.ach-ruined .ach-seal {
+            background: radial-gradient(circle at 35% 30%, #b7bdbf, #4c5254);
+            box-shadow: 0 0 18px -6px #9aa0a3, inset 0 -3px 8px rgba(0,0,0,.5);
+            color: #17181a; position: relative; overflow: hidden;
+        }
+        .ach-card.ach-ruined .ach-seal::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(0,0,0,.5);
+            clip-path: polygon(52% 0, 57% 0, 44% 52%, 60% 100%, 54% 100%, 39% 52%);
+        }
+        .ach-card.ach-ruined .ach-kicker { color: #8d9497; }
+        .ach-card.ach-ruined .ach-name { color: #dfe3e5; }
+        .ach-card.ach-ruined .ach-desc { color: #9aa0a3; }
+        .ach-card.ach-ruined .btn-royal {
+            border-color: #6f7578; color: #b7bdbf;
+            background: linear-gradient(135deg, rgba(140,146,150,.15), rgba(140,146,150,.05));
+        }
+        /* ruin deeds in the GALLERY keep their rank colour; a small ash
+           fissure on the seal marks them as the dark kind */
+        .ach-cell.ruin .ach-cell-seal { position: relative; overflow: hidden; }
+        .ach-cell.ruin .ach-cell-seal::after {
+            content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.45);
+            clip-path: polygon(52% 0, 58% 0, 43% 55%, 58% 100%, 52% 100%, 37% 55%);
+        }
+
+        /* rank chip replaces the star count on NEW deeds */
+        .ach-cell-rank {
+            font-size: 8px; font-weight: 700; letter-spacing: .14em;
+            text-transform: uppercase; color: var(--tc); opacity: .9;
+            font-family: 'Cinzel', serif;
+        }
+
+        /* ── the no-account dialog ────────────────────────────────── */
+        .nag {
+            position: fixed; inset: 0; z-index: 10002; display: flex;
+            align-items: center; justify-content: center;
+            background: rgba(8,5,2,.78); opacity: 0; transition: opacity .22s;
+        }
+        .nag.in { opacity: 1; }
+        .nag-card {
+            width: min(400px, 88vw); padding: 26px 24px 20px; text-align: center;
+            background: linear-gradient(#2a2012, #17110a);
+            border: 2px solid #8a6a1f; border-radius: 10px;
+            box-shadow: 0 18px 60px rgba(0,0,0,.65);
+            transform: translateY(12px); transition: transform .26s ease;
+        }
+        .nag.in .nag-card { transform: none; }
+        .nag-glyph { font-size: 30px; margin-bottom: 8px; }
+        .nag-title {
+            font-family: 'Cinzel', serif; font-weight: 700; font-size: 19px;
+            color: #f0dfb8; margin-bottom: 8px;
+        }
+        .nag-body { font-size: 14.5px; line-height: 1.55; color: #c3ae86; margin-bottom: 18px; }
+        .nag-body b { color: #f0dfb8; }
+        .nag-actions { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .nag-actions .btn-royal { padding: 10px 34px; font-size: 13px; }
+        .nag-dismiss {
+            background: none; border: none; cursor: pointer;
+            font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 1.5px;
+            text-transform: uppercase; color: #8d7c5d; padding: 4px 10px;
+        }
+        .nag-dismiss:hover { color: #c3ae86; }
+        .nag-dismiss small {
+            display: block; font-family: 'EB Garamond', serif; font-style: italic;
+            font-size: 11.5px; letter-spacing: 0; text-transform: none;
+            color: #6e5f45; margin-top: 3px;
+        }
+        .pv-flag {
+            text-align: center; font-size: 13px; color: #8d7c5d; margin-top: 6px;
+        }
+        .pv-flag button { background: none; border: none; color: #c9a542; cursor: pointer;
+            font: inherit; text-decoration: underline; }
+
+        @media (prefers-reduced-motion: reduce) { .nag, .nag-card { transition: none; } }
+    </style>
+</head>
+<body>
+
+<div class="pv-wrap">
+    <div class="pv-head">
+        <div class="pv-title">The Ledger of Deeds</div>
+        <div class="pv-sub">player preview — everything below renders with the live game's stylesheet</div>
+    </div>
+
+    <div class="pv-rail">
+        <button class="pv-btn" id="tgReveal">Reveal sealed</button>
+        <button class="pv-btn" id="tgEarned">Mark all earned</button>
+        <button class="pv-btn on" id="tgSound">Sound: on</button>
+        <button class="pv-btn" id="btnGold">Gold ceremony</button>
+        <button class="pv-btn ruinbtn" id="btnRuin">Ruin ceremony</button>
+        <button class="pv-btn" id="btnFinale">The same-breath finale</button>
+        <button class="pv-btn" id="btnNagWeb">No-account · web</button>
+        <button class="pv-btn" id="btnNagIos">No-account · iPhone</button>
+    </div>
+    <div class="pv-note">Tap any deed in the gallery to fire its own ceremony — disasters use the ruin frame.</div>
+    <div class="pv-flag" id="dismissFlag" hidden>The player tapped Dismiss — this dialog would never appear again on this device. <button id="resetDismiss">reset the flag</button></div>
+
+    <div class="pv-gallery" id="gallery"></div>
+</div>
+
+<script src="data/achievements.js"></script>
+<script>
+(function () {
+    'use strict';
+
+    // ── The 50 new deeds (review copy of deeds.html; A5 = six shelves) ──
+    // rank is EXPLICIT — the shipping change the plan calls for.
+    const NEW = [
+        ['A1','First Light','Record your first entry in the Almanac.','bronze'],
+        ['A2','The First Chapter','Discover all thirty Act I cards.','gold'],
+        ['A3','The Second Chapter','Discover all thirty Act II cards.','gold'],
+        ['A4','The Third Chapter','Discover all thirty Act III cards.','gold'],
+        ['A5a','The Armory','Discover all fourteen Weapons.','silver'],
+        ['A5b','The Apothecary','Discover all eleven Potions.','silver'],
+        ['A5c','The Reliquary','Discover all eight Artifacts.','silver'],
+        ['A5d',"The Wanderer's Road",'Discover all twenty-six Adventures.','silver'],
+        ['A5e','The Ledger of Endeavors','Discover all nineteen Endeavors.','silver'],
+        ['A5f','The Library','Discover all twelve Wisdoms.','silver'],
+        ['A6','The Mission Roll','Complete all thirty-six missions across your games.','legendary'],
+        ['A7','Bound in Full','Every card and every mission in the Almanac. The whole book.','legendary'],
+        ['B1','A Familiar Hand','Play any one card five times across your games.','bronze'],
+        ['B2','Ritual of Ten','Play the same card ten times.','silver'],
+        ['B3','The Full Court','Play a card of every type in a single game.','gold'],
+        ['B4','The Reliquary Hoard','Hold three Artifacts on your field at once.','silver'],
+        ['B5','Bristling','Hold five Weapons on your field at once.','silver'],
+        ['B6','Nothing Left to Play','Finish a game with an empty hand.','silver'],
+        ['C1','In the Red','Finish a game with a negative final score.','silver',{ruin:1}],
+        ['C2','The Scorned','End a game carrying ten Scorn.','bronze',{ruin:1}],
+        ['C3','Rock Bottom','Finish last, in the negative, with no gold left.','gold',{ruin:1}],
+        ['C4',"Debtor's Prison",'End a game owing gold.','gold',{ruin:1}],
+        ['C5','The Pauper King','Win with the least gold at the table.','silver'],
+        ['C6','Photo Finish','Win a game decided on the gold tiebreaker.','gold'],
+        ['C7','The Long Road Back','Win after entering Act III in last place.','platinum'],
+        ['D1','The Renaissance Heir','Reach five in all six skills in one game.','platinum'],
+        ['D2','Twin Peaks','Reach ten in two different skills in one game.','gold'],
+        ['D3','The Juggernaut','Reach fifteen Power in a single game.','gold'],
+        ['D4',"The King's Purse",'Hold fifty Gold at once.','silver'],
+        ['D5','A Reign of Legend','Win with a final score over one hundred and fifty.','platinum'],
+        ['D6','Unbroken','Win three games in a row.','gold'],
+        ['D7','The Dynasty','Win ten games in a row.','platinum'],
+        ['E1','Servant of Three Acts','Complete a mission in every act of one game.','silver'],
+        ['E2','A Perfect Record','Complete every mission you accepted — at least three, none failed.','gold'],
+        ['E3','The Whole Court Helped','Complete a mission using borrowed skill from three different rivals.','gold'],
+        ['E4','Out of the Maze','Complete The Labyrinth.','gold'],
+        ['E5','Prompt Service','Turn a mission in on the very round it activates.','silver'],
+        ['F1','The Other Face','Unlock Side B on any hero.','silver'],
+        ['F2','The Turned Card','Win a game playing a Side B board.','gold'],
+        ['F3','Ten Faces','Unlock Side B on all ten heroes.','legendary'],
+        ['F4','Know Every Face','Play a game as each of the ten heroes.','gold'],
+        ['F5','Natural Talent','Win the first game you ever play with a hero.','silver'],
+        ['F6','To the End of the Track',"Finish a game standing on your board's final slot.",'bronze'],
+        ['G1','Against the Field','Win a five-player game.','gold'],
+        ['G2','First Among Peers','Win a game against another human.','gold'],
+        ['G3','Bounty Collected',"Finish ahead of the day's WANTED rival.",'silver'],
+        ['G4','The Regulars','Play ten games with other people at the table.','gold'],
+        ['G5','The Perennial','Be crowned Champion of the Day twenty-five times.','platinum'],
+        ['H1','The Devil Went Down','Complete the Golden Fiddle mission playing as the Fiddler.','platinum',{secret:1}],
+        ['H2',"Bandit's Bounty",'Steal ten Gold from the table in a single game.','gold',{secret:1}],
+        ['H3','The Long Way Round','Reach Reunited the honest way — all three steps in one game.','platinum',{secret:1}],
+        ['H4','The Doctor Is In',"Take the Doctor's free potion in all three acts of one game.",'gold',{secret:1}],
+        ['H5','Winter of the Court','Lose a game with no mission completed and no card played.','silver',{secret:1,ruin:1}],
+        ['H6','The Price of a Promise',"Take more than 80 Prestige from A Knight's Promise in one game.",'platinum',{secret:1,ruin:1}],
+        ['H7','The Last Page','Earn every other deed in the gallery.','legendary',{secret:1}],
+    ].map(([num,name,desc,rank,f]) => ({ num, name, desc, rank, ...(f||{}) }));
+
+    const CHAPTERS = {
+        A: 'The Almanac', B: 'Rituals of the Hand', C: 'Ruin & Comedy',
+        D: 'Mastery', E: 'Service to the Realm', F: 'Heroes & Boards',
+        G: 'The Table', H: 'Sealed Deeds',
+    };
+
+    // The 24 already in the game — REAL data, straight from the game's own
+    // file. Two of them are ruins by decision (8/3): Best-Laid Plans and
+    // She Saw It Coming take the ash frame from now on.
+    const OLD = (window.FAVOR_DATA.achievements || []).map(d => ({
+        num: '', name: d.name, desc: d.desc, stars: d.stars,
+        rank: window.FAVOR_DATA.achievementTier(d.stars),
+        secret: !!d.secret,
+        ruin: d.id === 'missions_failed_5' || d.id === 'foretold_doom',
+    }));
+
+    // ── state ──
+    let reveal = false, earned = false, sound = true;
+
+    // ── gallery ──
+    const gal = document.getElementById('gallery');
+    function cellHtml(d, i, cls) {
+        const hidden = d.secret && !reveal && !earned;
+        const got = earned;
+        return `
+            <div class="ach-cell ach-${d.rank} ${got ? 'got' : 'locked'} ${hidden ? 'secret' : ''} ${d.ruin ? 'ruin' : ''}"
+                 data-i="${i}" data-set="${cls}" tabindex="0" role="button">
+                <div class="ach-cell-seal">${got ? '★' : (hidden ? '?' : '✦')}</div>
+                <div class="ach-cell-body"><b></b><span></span></div>
+                <div class="ach-cell-stars">
+                    ${d.stars ? `<span>${d.stars}★</span>` : `<span class="ach-cell-rank">${d.num}</span>`}
+                    <span class="ach-cell-tier">${d.rank}</span>
+                </div>
+            </div>`;
+    }
+    function render() {
+        const got = earned ? NEW.length + OLD.length : 0;
+        let cells = '';
+        let chap = '';
+        NEW.forEach((d, i) => {
+            const c = d.num[0];
+            if (c !== chap) {
+                chap = c;
+                cells += `<div class="pv-chap">${chap} · ${CHAPTERS[c]}${c === 'H' ? '<i>sealed — hidden until they fire</i>' : ''}</div>`;
+            }
+            cells += cellHtml(d, i, 'new');
+        });
+        cells += `<div class="pv-chap">Already in the game <i>these keep their Stars — history stands</i></div>`;
+        OLD.forEach((d, i) => { cells += cellHtml(d, i, 'old'); });
+
+        gal.innerHTML = `
+            <div class="ach-inner">
+                <div class="ach-head">
+                    <div class="ach-title">Achievements</div>
+                    <div class="ach-sub">${got} of ${NEW.length + OLD.length} deeds earned</div>
+                </div>
+                <div class="ach-grid">${cells}</div>
+            </div>`;
+
+        // names/descs as TEXT, mirroring the game (data never becomes markup)
+        gal.querySelectorAll('.ach-cell').forEach(el => {
+            const d = (el.dataset.set === 'new' ? NEW : OLD)[+el.dataset.i];
+            const hidden = d.secret && !reveal && !earned;
+            el.querySelector('b').textContent = hidden ? '???' : d.name;
+            el.querySelector('span').textContent = hidden ? 'A secret, still unfound.' : d.desc;
+            const fire = () => celebrate(d);
+            el.onclick = fire;
+            el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); } };
+        });
+    }
+
+    // ── sounds (Web Audio, synthesized — no assets) ──
+    let AC = null;
+    const ac = () => (AC = AC || new (window.AudioContext || window.webkitAudioContext)());
+    function goldFanfare() {
+        if (!sound) return;
+        const a = ac(), t0 = a.currentTime;
+        [[523.25,0,.34],[659.25,.09,.30],[783.99,.18,.30],[1046.5,.27,.62]].forEach(([f,dt,dur]) => {
+            const o = a.createOscillator(), g = a.createGain();
+            o.type = 'triangle'; o.frequency.value = f;
+            g.gain.setValueAtTime(0, t0+dt);
+            g.gain.linearRampToValueAtTime(.16, t0+dt+.02);
+            g.gain.exponentialRampToValueAtTime(.001, t0+dt+dur);
+            o.connect(g).connect(a.destination); o.start(t0+dt); o.stop(t0+dt+dur+.05);
+        });
+    }
+    function ruinToll() {
+        if (!sound) return;
+        const a = ac(), t0 = a.currentTime;
+        // the CRACK: a snap of filtered noise
+        const nb = a.createBuffer(1, a.sampleRate * .1, a.sampleRate);
+        const ch = nb.getChannelData(0);
+        for (let i = 0; i < ch.length; i++) ch[i] = (Math.random()*2-1) * Math.pow(1 - i/ch.length, 2);
+        const n = a.createBufferSource(); n.buffer = nb;
+        const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
+        const ng = a.createGain(); ng.gain.value = .5;
+        n.connect(hp).connect(ng).connect(a.destination); n.start(t0);
+        // the TOLL: a low minor fall
+        [[110, .04, 1.4], [82.4, .1, 1.6]].forEach(([f, dt, dur]) => {
+            const o = a.createOscillator(), g = a.createGain();
+            o.type = 'sine'; o.frequency.setValueAtTime(f, t0+dt);
+            o.frequency.exponentialRampToValueAtTime(f * .5, t0+dt+dur);
+            g.gain.setValueAtTime(0, t0+dt);
+            g.gain.linearRampToValueAtTime(.22, t0+dt+.05);
+            g.gain.exponentialRampToValueAtTime(.001, t0+dt+dur);
+            o.connect(g).connect(a.destination); o.start(t0+dt); o.stop(t0+dt+dur+.1);
+        });
+    }
+
+    // ── ceremonies — the game's own markup; ruin swaps frame + words ──
+    function celebrate(d) {
+        return new Promise((resolve) => {
+            const ruin = !!d.ruin;
+            const ov = document.createElement('div');
+            ov.className = 'ach-pop';
+            ov.innerHTML = `
+                <div class="ach-card ach-${d.rank} ${ruin ? 'ach-ruined' : ''}" role="dialog" aria-label="Achievement unlocked">
+                    <div class="ach-tier">${d.rank}</div>
+                    <div class="ach-seal"><span>★</span></div>
+                    <div class="ach-kicker">${ruin ? 'A Ruin Remembered' : 'Achievement Unlocked'}</div>
+                    <h2 class="ach-name"></h2>
+                    <p class="ach-desc"></p>
+                    ${d.stars ? `<div class="ach-stars">+${d.stars} ★</div>` : ''}
+                    <button class="btn-royal primary ach-ok"><span>${ruin ? 'So Be It' : 'Claim'}</span></button>
+                </div>`;
+            ov.querySelector('.ach-name').textContent = d.name;
+            ov.querySelector('.ach-desc').textContent = d.desc;
+            document.body.appendChild(ov);
+            requestAnimationFrame(() => ov.classList.add('in'));
+            (ruin ? ruinToll : goldFanfare)();
+            const done = () => {
+                ov.classList.remove('in');
+                setTimeout(() => { ov.remove(); resolve(); }, 260);
+            };
+            ov.querySelector('.ach-ok').onclick = done;
+            ov.onclick = (e) => { if (e.target === ov) done(); };
+        });
+    }
+
+    // ── the no-account dialog, both flavors ──
+    const NAG = {
+        web: {
+            glyph: '📜',
+            title: 'This court is unsaved',
+            body: 'You’ve earned a place in the book — but it lives only on this device. <b>Sign in on your Profile</b> to seal your court, and your Almanac and deeds will follow you anywhere.',
+        },
+        ios: {
+            glyph: '📜',
+            title: 'This court is unsaved',
+            body: 'You’ve earned a place in the book — but it lives only on this phone. The <b>Court Seal</b> can carry your court to another device — find it in your Profile under Account Sign-in.',
+        },
+    };
+    function showNag(flavor) {
+        // In the game: suppressed forever once favor_deednag_dismissed is set.
+        const flag = document.getElementById('dismissFlag');
+        const ov = document.createElement('div');
+        ov.className = 'nag';
+        const n = NAG[flavor];
+        ov.innerHTML = `
+            <div class="nag-card" role="dialog" aria-label="Unlocks are not saved">
+                <div class="nag-glyph">${n.glyph}</div>
+                <div class="nag-title">${n.title}</div>
+                <div class="nag-body">${n.body}</div>
+                <div class="nag-actions">
+                    <button class="btn-royal primary nag-ok"><span>Okay</span></button>
+                    <button class="nag-dismiss">Dismiss<small>this message will no longer pop up</small></button>
+                </div>
+            </div>`;
+        document.body.appendChild(ov);
+        requestAnimationFrame(() => ov.classList.add('in'));
+        const close = () => { ov.classList.remove('in'); setTimeout(() => ov.remove(), 220); };
+        ov.querySelector('.nag-ok').onclick = close;
+        ov.querySelector('.nag-dismiss').onclick = () => { close(); flag.hidden = false; };
+        ov.onclick = (e) => { if (e.target === ov) close(); };
+    }
+    document.getElementById('resetDismiss').onclick = () => {
+        document.getElementById('dismissFlag').hidden = true;
+    };
+
+    // ── rail wiring ──
+    const bind = (id, fn) => { document.getElementById(id).onclick = fn; };
+    bind('tgReveal', function () { reveal = !reveal; this.classList.toggle('on', reveal); render(); });
+    bind('tgEarned', function () { earned = !earned; this.classList.toggle('on', earned); render(); });
+    bind('tgSound', function () { sound = !sound; this.classList.toggle('on', sound); this.textContent = 'Sound: ' + (sound ? 'on' : 'off'); });
+    bind('btnGold', () => celebrate(NEW.find(d => d.num === 'D5')));
+    bind('btnRuin', () => celebrate(NEW.find(d => d.num === 'C3')));
+    bind('btnFinale', async () => {
+        // the moment H7 is designed around: the deed that completes the set,
+        // then the one that was watching — back to back, same breath.
+        await celebrate(NEW.find(d => d.num === 'A7'));
+        await celebrate(NEW.find(d => d.num === 'H7'));
+    });
+    bind('btnNagWeb', () => showNag('web'));
+    bind('btnNagIos', () => showNag('ios'));
+
+    render();
+
+    // Deep links for review: ?fire=C3 · ?nag=web|ios · ?reveal=1 · ?earned=1
+    const Q = new URLSearchParams(location.search);
+    if (Q.get('reveal')) document.getElementById('tgReveal').click();
+    if (Q.get('earned')) document.getElementById('tgEarned').click();
+    if (Q.get('fire')) {
+        const d = NEW.find(x => x.num === Q.get('fire').toUpperCase());
+        if (d) celebrate(d);
+    }
+    if (Q.get('nag')) showNag(Q.get('nag') === 'ios' ? 'ios' : 'web');
+})();
+</script>
+</body>
+</html>
