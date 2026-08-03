@@ -20,7 +20,15 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="icon" type="image/png" href="assets/ui/favicon-serpent.png">
     <style>
-        html, body { margin: 0; background: #150e07; }
+        /* The game stylesheet locks the viewport (html,body height:100%,
+           overflow:hidden — FAVOR is an app screen, not a document). This
+           page IS a document, so the lock comes off. !important beats the
+           100dvh media rule further down that file too. */
+        html, body {
+            margin: 0; background: #150e07;
+            height: auto !important; min-height: 100vh;
+            overflow: auto !important;
+        }
         body { font-family: 'EB Garamond', serif; color: #e8dcc4; }
 
         /* ── preview chrome (not game UI) ─────────────────────────── */
