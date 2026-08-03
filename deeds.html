@@ -205,7 +205,7 @@ em { color: var(--ink); }
 
 .deed {
     display: grid;
-    grid-template-columns: 46px 1fr 210px;
+    grid-template-columns: 46px 1fr 168px;
     gap: 4px 16px;
     padding: 15px 0 16px;
     border-bottom: 1px solid var(--rule-soft);
@@ -238,11 +238,6 @@ em { color: var(--ink); }
 .t-gold { color: var(--t-gold); }
 .t-plat { color: var(--t-plat); }
 .t-legend { color: var(--t-legend); }
-.pay {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
-    color: var(--gold-light); background: var(--panel-2);
-    border: 1px solid var(--rule); padding: 3px 8px 4px; white-space: nowrap;
-}
 .wave {
     font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em;
     padding: 3px 8px 4px; white-space: nowrap; border: 1px dashed currentColor;
@@ -329,9 +324,10 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
     <div class="mast-rule"></div>
     <p class="standfirst">Forty-eight achievement ideas for FAVOR, grouped into eight chapters.
     Every one carries a number — <b>point at the numbers you want</b> and I'll build those.
-    Each also carries what it pays the player and what it costs us to build, because a
-    deed that needs the engine to notice something new is a different job from one that
-    ships tonight.</p>
+    <b>None of them pay anything.</b> No stars, no tables, no crests: a deed is a name, a
+    rank and the moment it fires. What each one does carry is how hard it is and what it
+    costs us to build, because a deed that needs the engine to notice something new is a
+    different job from one that ships tonight.</p>
 </header>
 
 <section>
@@ -358,9 +354,9 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
     </div>
     <div class="prose">
         <p><strong>Where they live.</strong> The plumbing already exists and works: a deed is a
-        pure <code>check()</code> against a snapshot of your seat, it grants inside the same
-        transaction that pays the stars, and it can never pay twice. The gallery on the
-        title screen and the unlock ceremony at game over are built. What's missing is the
+        pure <code>check()</code> against a snapshot of your seat, it grants in a single
+        transaction on the player's own record, and it can never grant twice. The gallery on
+        the title screen and the unlock ceremony at game over are built. What's missing is the
         <em>content</em> — and one new home: the collection deeds belong in the Almanac, printed
         on the chapter tabs, where a player already sees "18 of 30 discovered" and feels
         the gap.</p>
@@ -376,15 +372,9 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <span class="chip t-gold">Gold</span>
             <span class="chip t-plat">Platinum</span>
             <span class="chip t-legend">Legendary</span>
-            <p>The existing five tiers. Tier isn't stored — it falls out of the star value,
-            so it stays one number in the data.</p>
-        </div>
-        <div class="legend-row">
-            <span class="pay">★ 20</span>
-            <span class="pay">✦ rare table</span>
-            <span class="pay">✦ crest</span>
-            <p>What the player is paid. Stars buy heroes and tables; a <em>cosmetic</em> payout
-            costs the economy nothing — see the note under the chapters.</p>
+            <p>The five ranks, kept exactly as they are — but they now mean
+            <em>difficulty</em> and nothing else. The rank a deed wears is the whole reward.
+            Bronze is a first night; Legendary is a year.</p>
         </div>
         <div class="legend-row">
             <span class="wave wave-1">wave 1</span>
@@ -418,7 +408,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Record your first entry in the Almanac.</div>
             <div class="deed-why">Its real job is telling players the book exists at all.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -427,7 +417,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The First Chapter</div>
             <div class="deed-desc">Discover all thirty Act I cards.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -436,7 +426,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Second Chapter</div>
             <div class="deed-desc">Discover all thirty Act II cards.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -445,7 +435,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Third Chapter</div>
             <div class="deed-desc">Discover all thirty Act III cards.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -458,7 +448,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-why">Six deeds, deliberately uneven: the Reliquary falls in a
             few nights, the Wanderer's Road takes months.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver ×6</span><span class="pay">★ 15 each</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver ×6</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -468,7 +458,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Complete all thirty-six missions across your games.</div>
             <div class="deed-why">Completed, not merely seen — the hardest honest grind in the game.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="pay">✦ rare table</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -478,7 +468,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Every card and every mission in the Almanac. The whole book.</div>
             <div class="deed-why">The game's ceiling. Nobody should reach it this year.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="pay">★ 200</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="wave wave-3">wave 3</span></div>
     </div>
 </div>
 
@@ -496,7 +486,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Play any one card five times across your games.</div>
             <div class="deed-why">The Almanac already counts every play, so "five times" needs no new counter.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -505,7 +495,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Ritual of Ten</div>
             <div class="deed-desc">Play the same card ten times.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-3">wave 3</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-3">wave 3</span></div>
     </div>
 
     <div class="deed">
@@ -516,7 +506,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             weapon, artifact, adventure, potion and wisdom.</div>
             <div class="deed-why">Actively fights the way people build. That's the point.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -525,7 +515,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Reliquary Hoard</div>
             <div class="deed-desc">Hold three Artifacts on your field at once.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -534,7 +524,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Bristling</div>
             <div class="deed-desc">Hold five Weapons on your field at once.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -544,7 +534,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Finish a game with an empty hand.</div>
             <div class="deed-why">Quietly teaches that discarding for gold is a real option.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 </div>
 
@@ -563,7 +553,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-why">Scorn counts double against you, so this is reachable — and right now
             the game says nothing when it happens.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -572,7 +562,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Scorned</div>
             <div class="deed-desc">End a game carrying ten Scorn.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -582,7 +572,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Finish last, in the negative, with no gold left.</div>
             <div class="deed-why">The full disaster. Worth a louder ceremony than a win.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -593,7 +583,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-why">Gold genuinely has no floor — one card makes every rival pay
             whether they can afford it or not. A bug-shaped quirk, turned into a trophy.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -602,7 +592,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Pauper King</div>
             <div class="deed-desc">Win with the least gold at the table.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -611,7 +601,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Photo Finish</div>
             <div class="deed-desc">Win a game decided on the gold tiebreaker.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -621,7 +611,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Win after entering Act III in last place.</div>
             <div class="deed-why">Needs one reading of the table taken at the act change.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 40</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-2">wave 2</span></div>
     </div>
 </div>
 
@@ -640,7 +630,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-why">The counterweight to the six existing "reach 10 of one skill" deeds:
             those reward a spike, this rewards breadth.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 40</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -649,7 +639,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Twin Peaks</div>
             <div class="deed-desc">Reach ten in two different skills in one game.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -658,7 +648,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Juggernaut</div>
             <div class="deed-desc">Reach fifteen Power in a single game.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -668,7 +658,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Hold fifty Gold at once.</div>
             <div class="deed-why">A ceiling above the existing thirty-gold deed.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -677,7 +667,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">A Reign of Legend</div>
             <div class="deed-desc">Win with a final score over one hundred.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 40</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -687,7 +677,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Win three games in a row.</div>
             <div class="deed-why">Your best streak is already stored on the record — this is nearly free.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -696,7 +686,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Dynasty</div>
             <div class="deed-desc">Win ten games in a row.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-1">wave 1</span></div>
     </div>
 </div>
 
@@ -713,7 +703,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Servant of Three Acts</div>
             <div class="deed-desc">Complete a mission in every act of one game.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -722,7 +712,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">A Perfect Record</div>
             <div class="deed-desc">Complete every mission you accepted — at least three, none failed.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -734,7 +724,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             the cheapest way to teach it — and it pairs with the "why can't I borrow?"
             copy fix that's still parked.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -745,7 +735,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-why">The game already has a secret for <em>failing</em> it. It should
             have one for beating it.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -754,7 +744,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Prompt Service</div>
             <div class="deed-desc">Turn a mission in on the very round it activates.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 </div>
 
@@ -771,7 +761,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Other Face</div>
             <div class="deed-desc">Unlock Side B on any hero.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -780,7 +770,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Turned Card</div>
             <div class="deed-desc">Win a game playing a Side B board.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -790,7 +780,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Unlock Side B on all ten heroes.</div>
             <div class="deed-why">Sits above The Master as the roster's true completion.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="pay">✦ rare table</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-legend">Legendary</span><span class="wave wave-1">wave 1</span></div>
     </div>
 
     <div class="deed">
@@ -800,7 +790,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Play a game as each of the ten heroes — winning optional.</div>
             <div class="deed-why">The gentle cousin of The Master: it asks for curiosity, not skill.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -809,7 +799,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Natural Talent</div>
             <div class="deed-desc">Win the first game you ever play with a hero.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -818,7 +808,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">To the End of the Track</div>
             <div class="deed-desc">Finish a game standing on your board's final slot.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="pay">★ 10</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-bronze">Bronze</span><span class="wave wave-2">wave 2</span></div>
     </div>
 </div>
 
@@ -835,7 +825,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">Against the Field</div>
             <div class="deed-desc">Win a five-player game.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -845,7 +835,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Win a game against another human.</div>
             <div class="deed-why">The table already knows how many humans were seated.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -855,7 +845,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Finish ahead of the day's WANTED rival.</div>
             <div class="deed-why">The WANTED plaque already pays stars for this — the deed makes it memorable.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -864,7 +854,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Regulars</div>
             <div class="deed-desc">Play ten games with other people at the table.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed">
@@ -874,7 +864,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Be crowned Champion of the Day twenty-five times.</div>
             <div class="deed-why">A long ceiling above the existing five-crown deed.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-1">wave 1</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-1">wave 1</span></div>
     </div>
 </div>
 
@@ -892,7 +882,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Devil Went Down</div>
             <div class="deed-desc">Complete the Golden Fiddle mission playing as the Fiddler.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed sealed">
@@ -903,7 +893,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-desc">Win as the Bandit without stealing a single point of prestige.</div>
             <div class="deed-why">Refusing your own board's best move.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed sealed">
@@ -915,7 +905,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             the Lost Corridor, then the reunion itself, all in one game.</div>
             <div class="deed-why">A private nod to the map-chain exploit we closed in July.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="pay">★ 50</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-plat">Platinum</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed sealed">
@@ -925,7 +915,7 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             <div class="deed-name">The Doctor Is In</div>
             <div class="deed-desc">Take the Doctor's free potion in all three acts of one game.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="pay">★ 30</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-gold">Gold</span><span class="wave wave-2">wave 2</span></div>
     </div>
 
     <div class="deed sealed">
@@ -937,37 +927,50 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
             onto your board.</div>
             <div class="deed-why">Somebody, somewhere, will rage-idle a whole game. Reward them.</div>
         </div>
-        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="pay">★ 20</span><span class="wave wave-2">wave 2</span></div>
+        <div class="deed-meta"><span class="chip t-silver">Silver</span><span class="wave wave-2">wave 2</span></div>
     </div>
 </div>
 
 <section>
-    <h2>The economy problem <span class="h2-note">read this before picking</span></h2>
+    <h2>What a deed pays <span class="h2-note">nothing — and that's the design</span></h2>
     <div class="prose">
-        <p>Stars are real money now. The Mint sells them, the store spends them at ★100 a hero,
-        and every deed that pays stars is inventory given away. Today's ledger stands at
-        <strong>570★ from deeds</strong> against the <strong>500★</strong> needed to buy the
-        five locked heroes — deliberately tuned so a devoted player can earn the roster.
-        Court Standing has since added another <strong>220★</strong> on top.</p>
-        <p>Priced as written above, this ledger adds <strong>1,530★</strong> — nearly triple
-        today's whole offering, and the store would stop mattering. Two levers, and I'd
-        pull both:</p>
+        <p>No stars, no tables, no crests. A deed pays a <strong>name</strong>, a <strong>rank</strong>
+        and the <strong>moment it fires</strong>. That's the whole reward, and it's the right one:
+        the game already has three ladders that pay. Court Standing pays stars for playing at
+        all. Hero levels pay tables and crests for devotion. The Mint sells the rest. Deeds
+        become the fourth thing — the one that pays in reputation.</p>
+        <p>The practical gain is that <strong>every constraint disappears</strong>. Stars are real
+        money; tie trophies to currency and each new idea turns into an economy negotiation,
+        which is exactly how the funniest deeds die — nobody can justify paying a player
+        thirty stars for finishing on minus fourteen. Unpriced, <em>Rock Bottom</em> costs
+        nothing to grant, all forty-eight can ship, and the forty-ninth idea is free too.</p>
     </div>
     <div class="scroller">
         <table>
-            <thead><tr><th>Lever</th><th>What it means</th><th>Effect</th></tr></thead>
+            <thead><tr><th>Consequence</th><th>What has to change</th></tr></thead>
             <tbody>
-                <tr><td>A flatter scale for new deeds</td><td>Bronze 5★, Silver 10★, Gold 15★. Existing deeds keep their prices — nobody's ledger gets devalued.</td><td class="n">1,530★ → 495★</td></tr>
-                <tr><td>Cosmetics at the top</td><td>Every Platinum and Legendary pays a <em>rare table</em>, a crest or a name tint instead of stars. The three rare tables already carry a lock marked <span style="font-family:var(--mono);font-size:13px">'feat'</span> — waiting since July for exactly this system.</td><td class="n">included above</td></tr>
+                <tr>
+                    <td>The rank needs to be real data</td>
+                    <td>Today a deed's tier is <em>derived</em> from its star value —
+                    <span style="font-family:var(--mono);font-size:13px">stars >= 200 ? legendary : …</span>.
+                    Set the new deeds to zero and every one of them comes out Bronze. So the rank
+                    becomes an explicit field on the deed. One line per entry, and the gallery
+                    keeps its five colours.</td>
+                </tr>
+                <tr>
+                    <td>The grant gets simpler</td>
+                    <td>The transaction still writes the deed to the player's record — it just
+                    stops adding stars. Nothing about the once-per-account guarantee changes.</td>
+                </tr>
+                <tr>
+                    <td>Two eras in one gallery</td>
+                    <td>The twenty-one deeds already in the game <em>do</em> pay — 570★ between
+                    them — and they stay exactly as they are; nobody's earned ledger gets
+                    devalued. A careful player will notice the old ones paid and the new ones
+                    don't. I'd leave it alone: that's history, not a bug.</td>
+                </tr>
             </tbody>
         </table>
-    </div>
-    <div class="prose">
-        <p>That's still <strong>495★</strong> if all forty-eight ship at once — which is the real
-        argument for shipping about twenty first (question 3 below). Twenty capped deeds land
-        near <strong>200★</strong>: generous, survivable, and re-tunable before the rest follow.
-        The cosmetic payouts cost the economy nothing and finally give the rare tables the
-        acquisition story they've never had.</p>
     </div>
 </section>
 
@@ -1026,10 +1029,13 @@ td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(
         </div>
         <div class="q">
             <div class="q-title">3 · How many deeds ship in the first pass?</div>
-            <p>All forty-six at once means a returning player unlocks a dozen in one game and
-            feels nothing for any of them.</p>
+            <p>Nothing forces the answer any more — unpriced deeds cost the game nothing, so
+            all forty-eight <em>could</em> land at once. The reason not to is pacing: a player
+            with two hundred games behind them would unlock a dozen in a single evening and
+            feel nothing for any of them.</p>
             <p class="rec"><b>My recommendation:</b> wave 1 and the sharpest half of wave 2 —
-            around twenty — then watch what actually fires before adding the rest.</p>
+            around twenty — then watch what actually fires before adding the rest. The
+            back half is a data file away whenever you want it.</p>
         </div>
     </div>
 </section>
